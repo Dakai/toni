@@ -57,14 +57,42 @@
 #    main()
 
 import argparse
-import requests
+from openai import OpenAI
 import os
 import subprocess
 
+system_message = """Your are a powerful terminal assistant generating a JSON containing a command line for my input.
+You will always reply using the following json structure: {"cmd":"the command", "exp": "some explanation", "exec": true}.
+Your answer will always only contain the json structure, never add any advice or supplementary detail or information,
+even if I asked the same question before.
+The field cmd will contain a single line command (don't use new lines, use separators like && and ; instead).
+The field exp will contain an short explanation of the command if you managed to generate an executable command, otherwise it will contain the reason of your failure.
+The field exec will contain true if you managed to generate an executable command, false otherwise.
+
+Examples:
+Me: list all files in my home dir
+Yai: {"cmd":"ls ~", "exp": "list all files in your home dir", "exec": true}
+Me: list all pods of all namespaces
+Yai: {"cmd":"kubectl get pods --all-namespaces", "exp": "list pods form all k8s namespaces", "exec": true}
+Me: how are you ?
+Yai: {"cmd":"", "exp": "I'm good thanks but I cannot generate a command for this. Use the chat mode to discuss.", "exec": false}"""
+
+
 def get_ai_response(prompt, api_key):
-    # Placeholder for AI API call
-    # Implement the actual API call to Claude or OpenAI here
-    pass
+    try:
+        client = OpenAI(api_key=api_key)
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": prompt},
+            ],
+            model='gpt-4o-mini'
+        )
+        response = chat_completion.choices[0].message.content
+        return response
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
 
 def execute_command(command):
     try:
@@ -88,8 +116,8 @@ def main():
         print("Please set the AI_API_KEY environment variable.")
         return
 
-    prompt = f"Convert the following request into a Linux terminal command: {query}"
-    response = get_ai_response(prompt, api_key)
+    #prompt = f"Convert the following request into a Linux terminal command: {query}"
+    response = get_ai_response(system_message, api_key)
 
     print(f"Suggested command: {response}")
     

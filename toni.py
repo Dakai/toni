@@ -60,6 +60,7 @@ import argparse
 from openai import OpenAI
 import os
 import subprocess
+import json
 
 system_message = """Your are a powerful terminal assistant generating a JSON containing a command line for my input.
 You will always reply using the following json structure: {"cmd":"the command", "exp": "some explanation", "exec": true}.
@@ -75,10 +76,10 @@ Yai: {"cmd":"ls ~", "exp": "list all files in your home dir", "exec": true}
 Me: list all pods of all namespaces
 Yai: {"cmd":"kubectl get pods --all-namespaces", "exp": "list pods form all k8s namespaces", "exec": true}
 Me: how are you ?
-Yai: {"cmd":"", "exp": "I'm good thanks but I cannot generate a command for this. Use the chat mode to discuss.", "exec": false}"""
+Yai: {"cmd":"", "exp": "I'm good thanks but I cannot generate a command for this.", "exec": false}"""
 
 
-def get_ai_response(prompt, api_key):
+def get_ai_response(system_message, api_key ,prompt):
     try:
         client = OpenAI(api_key=api_key)
         chat_completion = client.chat.completions.create(
@@ -110,6 +111,8 @@ def main():
     args = parser.parse_args()
 
     query = ' '.join(args.query)
+
+    #print(f"Query: {query}")
     api_key = os.environ.get('OPENAI_API_KEY')
 
     if not api_key:
@@ -117,13 +120,27 @@ def main():
         return
 
     #prompt = f"Convert the following request into a Linux terminal command: {query}"
-    response = get_ai_response(system_message, api_key)
+    response = get_ai_response(system_message, api_key, query)
+    
+    if response is None:
+        return
+    try:
+        data = json.loads(response)
+    
+    except Exception as e:
+        print(f"An error occurred while parsing the response: {e}")
+        return
 
-    print(f"Suggested command: {response}")
+    if data.get('exec') == False:
+        print(data.get('exp'))
+        return
+
+    print(f"Suggested command: {data.get('cmd')}")
+    print(f"Explanation: {data.get('exp')}")
     
     confirmation = input("Do you want to execute this command? (y/n): ").lower()
     if confirmation == 'y' or confirmation == '':
-        execute_command(response)
+        execute_command(data.get('cmd'))
     else:
         print("Command execution cancelled.")
 

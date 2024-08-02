@@ -61,6 +61,7 @@ from openai import OpenAI
 import os
 import subprocess
 import json
+import time
 
 system_message = """Your are a powerful terminal assistant generating a JSON containing a command line for my input.
 You will always reply using the following json structure: {"cmd":"the command", "exp": "some explanation", "exec": true}.
@@ -95,11 +96,28 @@ def get_ai_response(system_message, api_key ,prompt):
         print(f"An error occurred: {e}")
         return None
 
+def write_to_zsh_history(command):
+    try:
+        current_time = int(time.time())  # Get current Unix timestamp
+        timestamped_command = f": {current_time}:0:{command}"  # Assuming duration of 0 for now
+        with open("/home/dakai/.zsh_history", "a") as f:
+            f.write(timestamped_command + "\n")
+    except Exception as e:
+        print(f"An error occurred while writing to .zsh_history: {e}")
+
+def reload_zsh_history():
+    try:
+        os.system("source ~/.zshrc")
+    except Exception as e:
+        print(f"An error occurred while reloading .zshrc: {e}")
+
 def execute_command(command):
     try:
         result = subprocess.run(command, shell=True, check=True, text=True, capture_output=True)
         print("Command output:")
         print(result.stdout)
+        write_to_zsh_history(command)
+        #reload_zsh_history()
     except subprocess.CalledProcessError as e:
         print(f"An error occurred while executing the command: {e}")
         print("Error output:")

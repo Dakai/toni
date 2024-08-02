@@ -99,7 +99,7 @@ def get_ai_response(system_message, api_key ,prompt):
 def write_to_zsh_history(command):
     try:
         current_time = int(time.time())  # Get current Unix timestamp
-        timestamped_command = f": {current_time}:0:{command}"  # Assuming duration of 0 for now
+        timestamped_command = f": {current_time}:0;{command}"  # Assuming duration of 0 for now
         with open("/home/dakai/.zsh_history", "a") as f:
             f.write(timestamped_command + "\n")
     except Exception as e:
@@ -108,6 +108,8 @@ def write_to_zsh_history(command):
 def reload_zsh_history():
     try:
         os.system("source ~/.zshrc")
+        result = subprocess.run("source ~/.zshrc", shell=True, check=True, text=True, capture_output=True)
+        print(result.stdout)
     except Exception as e:
         print(f"An error occurred while reloading .zshrc: {e}")
 

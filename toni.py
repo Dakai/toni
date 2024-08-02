@@ -4,6 +4,7 @@ import os
 import subprocess
 import json
 import time
+import google.generativeai as genai
 
 system_message = """Your are a powerful terminal assistant generating a JSON containing a command line for my input.
 You will always reply using the following json structure: {"cmd":"the command", "exp": "some explanation", "exec": true}.
@@ -22,7 +23,7 @@ Me: how are you ?
 Yai: {"cmd":"", "exp": "I'm good thanks but I cannot generate a command for this.", "exec": false}"""
 
 
-def get_ai_response(system_message, api_key ,prompt):
+def get_open_ai_response(system_message, api_key, prompt):
     try:
         client = OpenAI(api_key=api_key)
         chat_completion = client.chat.completions.create(
@@ -34,6 +35,20 @@ def get_ai_response(system_message, api_key ,prompt):
         )
         response = chat_completion.choices[0].message.content
         return response
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+
+def get_gemini_response(api_key, prompt):
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-1.5-pro-latest")
+        content = [
+            {'role': 'system', 'parts': ["You are a helpful assistant."]},
+            {'role': 'user', 'parts': ["What's the capital of France?"]}
+        ]
+        response = model.generate_content(content)
+        return response.text
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
@@ -75,14 +90,21 @@ def main():
     query = ' '.join(args.query)
 
     #print(f"Query: {query}")
-    api_key = os.environ.get('OPENAI_API_KEY')
+    openai_api_key = os.environ.get('OPENAI_API_KEY')
+    google_api_key = os.environ.get('GOOGLEAI_API_KEY')
 
-    if not api_key:
+    if google_api_key:
+        response = get_gemini_response(google_api_key, query)
+
+    else:
+        if openai_api_key:
+            response = get_open_ai_response(system_message, openai_api_key, query)
+    if not openai_api_key:
         print("Please set the AI_API_KEY environment variable.")
         return
 
     #prompt = f"Convert the following request into a Linux terminal command: {query}"
-    response = get_ai_response(system_message, api_key, query)
+    response = get_open_ai_response(system_message, openai_api_key, query)
     
     if response is None:
         return

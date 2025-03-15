@@ -9,7 +9,7 @@ import platform
 import shutil
 
 system_message = """Your are a powerful terminal assistant generating a JSON containing a command line for my input.
-You will always reply using the following json structure: {"cmd":"the command", "exp": "some explanation", "exec": true}.
+You will always reply using the following json structure: {{"cmd":"the command", "exp": "some explanation", "exec": true}}.
 Your answer will always only contain the json structure, never add any advice or supplementary detail or information,
 even if I asked the same question before.
 The field cmd will contain a single line command (don't use new lines, use separators like && and ; instead).
@@ -20,11 +20,11 @@ The host system is using {system_info}. Please ensure commands are compatible wi
 
 Examples:
 Me: list all files in my home dir
-Yai: {"cmd":"ls ~", "exp": "list all files in your home dir", "exec": true}
+You: {{"cmd":"ls ~", "exp": "list all files in your home dir", "exec": true}}
 Me: list all pods of all namespaces
-Yai: {"cmd":"kubectl get pods --all-namespaces", "exp": "list pods form all k8s namespaces", "exec": true}
+You: {{"cmd":"kubectl get pods --all-namespaces", "exp": "list pods form all k8s namespaces", "exec": true}}
 Me: how are you ?
-Yai: {"cmd":"", "exp": "I'm good thanks but I cannot generate a command for this.", "exec": false}"""
+You: {{"cmd":"", "exp": "I'm good thanks but I cannot generate a command for this.", "exec": false}}"""
 
 
 def get_system_info():
@@ -54,18 +54,35 @@ def get_gemini_response(api_key, prompt, system_info):
         client = genai.Client(api_key=api_key)
 
         formatted_system_message = system_message.format(system_info=system_info)
-        if "Windows" in system_info:
-            formatted_system_message = system_message.format(system_info=system_info)
+
+        # Create the generation config with system instructions
+        # generation_config = {
+        #    "temperature": 0.2,
+        #    "top_p": 0.95,
+        #    "top_k": 0,
+        #    "max_output_tokens": 1024,
+        # }
+
+        # The new Gemini API doesn't always handle system messages properly
+        # Let's combine the system message with the user prompt
+        combined_prompt = f"{formatted_system_message}\n\nUser request: {prompt}"
 
         response = client.models.generate_content(
             model="gemini-2.0-flash",
-            contents=[
-                {"role": "system", "parts": [formatted_system_message]},
-                {"role": "user", "parts": [prompt]},
-            ],
+            contents=[{"parts": [{"text": combined_prompt}]}],
         )
 
-        return response.text
+        # Extract just the JSON part from the response
+        response_text = response.text
+        # Find JSON between curly braces if there's extra text
+        import re
+
+        if response_text:
+            json_match = re.search(r"(\{.*?\})", response_text, re.DOTALL)
+            if json_match:
+                return json_match.group(1)
+            return response_text
+
     except Exception as e:
         print(f"An error occurred with Gemini: {e}")
         return None
@@ -83,9 +100,20 @@ def get_open_ai_response(api_key, prompt, system_info):
                 {"role": "user", "content": prompt},
             ],
             model="gpt-4o-mini",
+            temperature=0.2,
         )
+
         response = chat_completion.choices[0].message.content
-        return response
+
+        # Extract just the JSON part from the response
+        import re
+
+        if response:
+            json_match = re.search(r"(\{.*?\})", response, re.DOTALL)
+            if json_match:
+                return json_match.group(1)
+            return response
+
     except Exception as e:
         print(f"An error occurred with OpenAI: {e}")
         return None
@@ -136,64 +164,78 @@ def command_exists(command):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="TONI: Terminal Operation Natural Instruction"
-    )
-    parser.add_argument("query", nargs="+", help="Your natural language query")
-    args = parser.parse_args()
-
-    # Remove trailing question mark if present
-    query = " ".join(args.query).rstrip("?")
-
-    system_info = get_system_info()
-    print(f"Detected system: {system_info}")
-
-    google_api_key = os.environ.get("GOOGLEAI_API_KEY")
-    openai_api_key = os.environ.get("OPENAI_API_KEY")
-    response = None
-
-    # Try Gemini first, fall back to OpenAI
-    if google_api_key:
-        response = get_gemini_response(google_api_key, query, system_info)
-
-    if response is None and openai_api_key:
-        response = get_open_ai_response(openai_api_key, query, system_info)
-
-    if response is None:
-        print("Please set the GOOGLEAI_API_KEY or OPENAI_API_KEY environment variable.")
-        return
-
     try:
-        data = json.loads(response)
-    except Exception as e:
-        print(f"An error occurred while parsing the response: {e}")
-        print(f"Raw response: {response}")
-        return
-
-    if data.get("exec") == False:
-        print(data.get("exp"))
-        return
-
-    cmd = data.get("cmd")
-
-    # Check if the command exists
-    if cmd and not command_exists(cmd):
-        print(
-            f"Warning: The command '{cmd.split()[0]}' doesn't appear to be installed on your system."
+        parser = argparse.ArgumentParser(
+            description="TONI: Terminal Operation Natural Instruction"
         )
-        print(f"Suggested command: {cmd}")
-        print(f"Explanation: {data.get('exp')}")
-        print("Please verify that this command will work on your system.")
-    else:
-        print(f"Suggested command: {cmd}")
-        print(f"Explanation: {data.get('exp')}")
+        parser.add_argument("query", nargs="+", help="Your natural language query")
+        args = parser.parse_args()
 
-    confirmation = input("Do you want to execute this command? (y/n): ").lower()
-    if confirmation == "y" or confirmation == "":
-        execute_command(cmd)
-    else:
-        print("Command execution cancelled.")
+        # Remove trailing question mark if present
+        query = " ".join(args.query).rstrip("?")
+
+        system_info = get_system_info()
+        print(f"Detected system: {system_info}")
+
+        google_api_key = os.environ.get("GOOGLEAI_API_KEY")
+        openai_api_key = os.environ.get("OPENAI_API_KEY")
+        response = None
+
+        # Try Gemini first, fall back to OpenAI
+        if google_api_key:
+            response = get_gemini_response(google_api_key, query, system_info)
+
+        if response is None and openai_api_key:
+            response = get_open_ai_response(openai_api_key, query, system_info)
+
+        if response is None:
+            print(
+                "Please set the GOOGLEAI_API_KEY or OPENAI_API_KEY environment variable."
+            )
+            return
+
+        try:
+            data = json.loads(response)
+        except Exception as e:
+            print(f"An error occurred while parsing the response: {e}")
+            print(f"Raw response: {response}")
+            return
+
+        if data.get("exec") == False:
+            print(data.get("exp"))
+            return
+
+        cmd = data.get("cmd")
+
+        # Check if the command exists
+        if cmd and not command_exists(cmd):
+            print(
+                f"Warning: The command '{cmd.split()[0]}' doesn't appear to be installed on your system."
+            )
+            print(f"Suggested command: {cmd}")
+            print(f"Explanation: {data.get('exp')}")
+            print("Please verify that this command will work on your system.")
+        else:
+            print(f"Suggested command: {cmd}")
+            print(f"Explanation: {data.get('exp')}")
+
+        try:
+            confirmation = input("Do you want to execute this command? (y/n): ").lower()
+            if confirmation == "y" or confirmation == "":
+                execute_command(cmd)
+            else:
+                print("Command execution cancelled.")
+        except KeyboardInterrupt:
+            print("\nOperation cancelled by user.")
+            return
+
+    except KeyboardInterrupt:
+        print("\nOperation cancelled by user.")
+        return
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nOperation cancelled by user.")

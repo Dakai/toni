@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "toni-cli"
+version = "0.1.0"
+description = "Terminal Operation Natural Instruction - AI-powered terminal assistant"
+readme = "README.md"
+authors = [{name = "Dakai Ou", email = "oudakai@gmail.com"}]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.7"
+dependencies = [
+    "openai>=1.0.0",
+    "google-generativeai>=0.1.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/dakai/toni"
+"Bug Tracker" = "https://github.com/dakai/toni/issues"
+
+[project.scripts]
+toni = "toni.cli:main"

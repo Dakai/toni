@@ -1,3 +1,6 @@
 openai
 google-genai
-pyinstaller
+setuptools
+build
+twine
+wheel

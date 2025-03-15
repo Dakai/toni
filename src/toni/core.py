@@ -117,13 +117,51 @@ def get_open_ai_response(api_key, prompt, system_info):
         return None
 
 
-def write_to_zsh_history(command):
+def is_using_zsh():
+    """Check if the user is currently using zsh as their shell."""
     try:
+        # Get the current shell from SHELL environment variable
+        current_shell = os.environ.get("SHELL", "")
+
+        # Check if it contains 'zsh'
+        if "zsh" in current_shell:
+            return True
+
+        # Alternative check: try to get parent process name
+        parent_pid = os.getppid()
+        try:
+            with open(f"/proc/{parent_pid}/comm", "r") as f:
+                parent_process = f.read().strip()
+                if "zsh" in parent_process:
+                    return True
+        except (FileNotFoundError, PermissionError):
+            # /proc might not be available on all systems
+            pass
+
+        return False
+    except Exception:
+        # Default to False if any errors occur
+        return False
+
+
+def write_to_zsh_history(command):
+    """Write command to zsh history if zsh is being used."""
+    if not is_using_zsh():
+        return  # Skip if not using zsh
+
+    try:
+        # Get the zsh history file path
+        zsh_history_path = os.path.expanduser("~/.zsh_history")
+
+        # Check if the file exists
+        if not os.path.exists(zsh_history_path):
+            return
+
         current_time = int(time.time())  # Get current Unix timestamp
         timestamped_command = (
             f": {current_time}:0;{command}"  # Assuming duration of 0 for now
         )
-        with open("/home/dakai/.zsh_history", "a") as f:
+        with open(zsh_history_path, "a") as f:
             f.write(timestamped_command + "\n")
     except Exception as e:
         print(f"An error occurred while writing to .zsh_history: {e}")

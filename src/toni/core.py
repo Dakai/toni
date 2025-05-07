@@ -1,14 +1,13 @@
-# import argparse
 import os
 import subprocess
 import time
 from google import genai  # Assuming this is google.generativeai or compatible
 from openai import OpenAI
-
-# from mistralai import Mistral
+from mistralai import Mistral
 import platform
 import shutil
 import configparser
+import re
 
 
 system_message = """Your are a powerful terminal assistant generating a JSON containing a command line for my input.
@@ -80,53 +79,6 @@ disabled = false
     return config
 
 
-# def get_mistral_response(
-#    api_key, prompt, system_info, model_name="mistral-small-latest"
-# ):
-#    try:
-#        # Note: The genai.Client() initialization might vary depending on the exact Google library version/package.
-#        # This code assumes the user's existing genai.Client() works as intended.
-#        # If using google-generativeai, it's usually:
-#        # import google.generativeai as genai
-#        # genai.configure(api_key=api_key)
-#        # model_service = genai.GenerativeModel(model_name)
-#        # response = model_service.generate_content(...)
-#        client = Mistral(api_key=api_key)
-#
-#        formatted_system_message = system_message.format(system_info=system_info)
-#        combined_prompt = f"{formatted_system_message}\n\nUser request: {prompt}"
-#
-#        # The generation_config was commented out in the original, kept as is.
-#        # generation_config = {
-#        #    "temperature": 0.2,
-#        #    "top_p": 0.95,
-#        #    "top_k": 0,
-#        #    "max_output_tokens": 1024,
-#        # }
-#
-#        chat_completion = client.chat.complete(
-#            messages=[
-#                {"role": "system", "content": formatted_system_message},
-#                {"role": "user", "content": prompt},
-#            ],
-#            model=model_name,  # Use the model_name parameter
-#        )
-#
-#        response = chat_completion.choices[0].message.content
-#        import re
-#
-#        if response:
-#            json_match = re.search(r"(\{.*?\})", response, re.DOTALL)
-#            if json_match:
-#                return json_match.group(1)
-#            return response  # Fallback to raw text if no JSON object found
-#        return None  # Explicitly return None if response is empty
-#
-#    except Exception as e:
-#        print(f"An error occurred with Mistral (model: {model_name}): {e}")
-#        return None
-
-
 def get_gemini_response(api_key, prompt, system_info, model_name="gemini-2.0-flash"):
     try:
         # Note: The genai.Client() initialization might vary depending on the exact Google library version/package.
@@ -156,7 +108,6 @@ def get_gemini_response(api_key, prompt, system_info, model_name="gemini-2.0-fla
         )
 
         response_text = response.text
-        import re
 
         if response_text:
             json_match = re.search(r"(\{.*?\})", response_text, re.DOTALL)
@@ -167,6 +118,43 @@ def get_gemini_response(api_key, prompt, system_info, model_name="gemini-2.0-fla
 
     except Exception as e:
         print(f"An error occurred with Gemini (model: {model_name}): {e}")
+        return None
+
+
+def get_mistral_response(
+    api_key,
+    prompt,
+    system_info,
+    model_name="mistral-small-latest",
+):
+    try:
+        client = Mistral(api_key=api_key)
+
+        formatted_system_message = system_message.format(system_info=system_info)
+
+        chat_completion = client.chat.complete(
+            messages=[
+                {"role": "system", "content": formatted_system_message},
+                {"role": "user", "content": prompt},
+            ],
+            model=model_name,  # Use the model_name parameter
+        )
+
+        response = None
+
+        if chat_completion.choices:
+            response = chat_completion.choices[0].message.content
+
+        if response:
+            response = str(response)
+            json_match = re.search(r"(\{.*?\})", response, re.DOTALL)
+            if json_match:
+                return json_match.group(1)
+            return response  # Fallback to raw text if no JSON object found
+        return None  # Explicitly return None if response is empty
+
+    except Exception as e:
+        print(f"An error occurred with Mistral (model: {model_name}): {e}")
         return None
 
 
@@ -188,7 +176,6 @@ def get_open_ai_response(
         )
 
         response = chat_completion.choices[0].message.content
-        import re
 
         if response:
             json_match = re.search(r"(\{.*?\})", response, re.DOTALL)
@@ -253,7 +240,3 @@ def command_exists(command):
         return False
     base_command = command.split()[0]
     return shutil.which(base_command) is not None
-
-
-# Removed main() function from core.py
-# It is now solely in cli.py

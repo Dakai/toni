@@ -70,6 +70,12 @@ url =
 key =
 model = gemini-2.0-flash
 disabled = false
+
+[MISTRAL]
+url =
+key =
+model = mistral-small-latest
+disabled = false
     """
     config.read_string(default_ini_content)  # Load built-in defaults
 

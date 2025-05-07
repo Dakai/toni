@@ -1,5 +1,5 @@
 from mistralai import Mistral
-import os
+from termcolor import colored, cprint
 
 
 def get_mistral_response(
@@ -68,5 +68,15 @@ def get_mistral_response(
         return None
 
 
-api_key = os.environ.get("MISTRAL_API_KEY")
-get_mistral_response(api_key)
+# def colored(text, color_code):
+#    """Apply ANSI color code to text."""
+#    return f"\033[{color_code}m{text}\033[0m"
+
+text = colored("Hello, World!", "red", attrs=["reverse", "blink"])
+print(text)
+cprint("Hello, World!", "green", "on_red")
+cprint("Hello, World!", "blue", attrs=["reverse"])
+
+
+# api_key = os.environ.get("MISTRAL_API_KEY")
+# get_mistral_response(api_key)

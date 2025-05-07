@@ -1,6 +1,7 @@
 import argparse
 import os
 import json
+from termcolor import colored, cprint
 
 # Assuming 'toni' is a package or core.py is in PYTHONPATH
 # If core.py is in the same directory, use: from core import ...
@@ -76,9 +77,9 @@ def main():
         # Try Gemini first if not disabled and API key is available
         if not gemini_disabled:
             if gemini_api_key:
-                print(
-                    f"Attempting to use Gemini (model: {gemini_model if gemini_model else 'gemini-2.0-flash'})..."
-                )
+                # print(
+                #    f"Attempting to use Gemini (model: {gemini_model if gemini_model else 'gemini-2.0-flash'})..."
+                # )
                 response = get_gemini_response(
                     gemini_api_key, query, system_info, gemini_model
                 )
@@ -88,15 +89,15 @@ def main():
                 print(
                     "Gemini API key not found in config (GEMINI.key) or environment (GOOGLEAI_API_KEY). Skipping Gemini."
                 )
-        else:
-            print("Gemini is disabled in the configuration.")
+        # else:
+        #    print("Gemini is disabled in the configuration.")
 
         # Fall back to OpenAI if Gemini failed or was skipped, and if OpenAI is not disabled and API key is available
         if response is None and not openai_disabled:
             if openai_api_key:
-                print(
-                    f"Attempting to use OpenAI (model: {openai_model if openai_model else 'gpt-4o-mini'}{', URL: ' + openai_url if openai_url else ''})..."
-                )
+                # print(
+                #    f"Attempting to use OpenAI (model: {openai_model if openai_model else 'gpt-4o-mini'}{', URL: ' + openai_url if openai_url else ''})..."
+                # )
                 response = get_open_ai_response(
                     openai_api_key, query, system_info, openai_model, openai_url
                 )
@@ -106,17 +107,17 @@ def main():
                 print(
                     "OpenAI API key not found in config (OPENAI.key) or environment (OPENAI_API_KEY). Skipping OpenAI."
                 )
-        elif (
-            response is None and openai_disabled
-        ):  # Only print if it wasn't tried because it's disabled
-            print("OpenAI is disabled in the configuration.")
+        # elif (
+        #    response is None and openai_disabled
+        # ):  # Only print if it wasn't tried because it's disabled
+        #    print("OpenAI is disabled in the configuration.")
 
         ## Fall back to Mistral if Gemini and OpenAI failed or was skipped
         if response is None and not mistral_disabled:
             if mistral_api_key:
-                print(
-                    f"Attempting to use Mistral AI (model: {mistral_model if mistral_model else 'mistral-small-latest'})..."
-                )
+                # print(
+                #    f"Attempting to use Mistral AI (model: {mistral_model if mistral_model else 'mistral-small-latest'})..."
+                # )
                 response = get_mistral_response(
                     mistral_api_key, query, system_info, mistral_model
                 )
@@ -126,10 +127,10 @@ def main():
                 print(
                     "Mistral API key not found in config (MISTRAL.key) or environment (MISTRAL_API_KEY). Skipping Mistral."
                 )
-        elif (
-            response is None and mistral_disabled
-        ):  # Only print if it wasn't tried because it's disabled
-            print("Mistral AI is disabled in the configuration.")
+        # elif (
+        #    response is None and mistral_disabled
+        # ):  # Only print if it wasn't tried because it's disabled
+        #    print("Mistral AI is disabled in the configuration.")
 
         if response is None:
             print("\nFailed to get a command from any LLM provider.")
@@ -144,9 +145,9 @@ def main():
                 )
             return
 
-        print(
-            f"Response obtained from: {provider_used if provider_used else 'Unknown'}"
-        )
+        # print(
+        #    f"Response obtained from: {provider_used if provider_used else 'Unknown'}"
+        # )
 
         try:
             data = json.loads(response)
@@ -174,30 +175,32 @@ def main():
 
         if not command_exists(cmd):
             print(
-                f"\nWarning: The command '{cmd.split()[0]}' doesn't appear to be installed or in PATH."
+                f"\nWarning: The command '{colored(cmd.split()[0],'red')}' doesn't appear to be installed or in PATH."
             )
-            print(f"Suggested command: {cmd}")
-            print(f"Explanation: {explanation}")
-            print("Please verify and ensure the command is available before execution.")
+            print(f"Suggested command: {colored(cmd,'blue')}")
+            print(f"Explanation: {colored(explanation,'blue')}")
+            # print("Please verify and ensure the command is available before execution.")
         else:
             print(f"\nSuggested command: {cmd}")
             print(f"Explanation: {explanation}")
 
         try:
-            confirmation = input("Do you want to execute this command? (Y/n): ").lower()
+            confirmation = input("Do you want to execute the command? (Y/n): ").lower()
             if confirmation == "y" or confirmation == "":  # Default to yes
                 execute_command(cmd)
             else:
-                print("Command execution cancelled.")
+                print(colored("Command execution cancelled.", "red"))
         except KeyboardInterrupt:
-            print("\nOperation cancelled by user (during confirmation).")
+            print(
+                colored("\nOperation cancelled by user (during confirmation).", "red")
+            )
             return
 
     except KeyboardInterrupt:
         print("\nOperation cancelled by user.")
         return
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        print(colored((f"An unexpected error occurred: {e}"), "red"))
 
 
 if __name__ == "__main__":
@@ -205,4 +208,4 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         # This is redundant if main() already handles it, but good for robustness
-        print("\nOperation cancelled by user (main level).")
+        print(colored("\nOperation cancelled by user (main level).", "red"))

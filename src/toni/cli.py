@@ -114,7 +114,9 @@ def main():
         ## Fall back to Mistral if Gemini and OpenAI failed or was skipped
         if response is None and not mistral_disabled:
             if mistral_api_key:
-                print(f"Attempting to use Mistral AI (model: {mistral_model})...")
+                print(
+                    f"Attempting to use Mistral AI (model: {mistral_model if mistral_model else 'mistral-small-latest'})..."
+                )
                 response = get_mistral_response(
                     mistral_api_key, query, system_info, mistral_model
                 )
@@ -131,12 +133,14 @@ def main():
 
         if response is None:
             print("\nFailed to get a command from any LLM provider.")
-            if (gemini_disabled or not gemini_api_key) and (
-                openai_disabled or not openai_api_key
+            if (
+                (gemini_disabled or not gemini_api_key)
+                and (openai_disabled or not openai_api_key)
+                and (mistral_disabled or not mistral_api_key)
             ):
                 print(
                     "Please check your API key configurations in ~/.toni or environment "
-                    "variables (GOOGLEAI_API_KEY, OPENAI_API_KEY) and ensure providers are not disabled."
+                    "variables (GOOGLEAI_API_KEY, OPENAI_API_KEY, MISTRAL_API_KEY) and ensure providers are not disabled."
                 )
             return
 

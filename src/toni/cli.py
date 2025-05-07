@@ -8,6 +8,7 @@ from toni.core import (
     get_system_info,
     get_gemini_response,
     get_open_ai_response,
+    get_mistral_response,
     command_exists,
     execute_command,
     load_app_config,  # Import the new config loader
@@ -57,21 +58,17 @@ def main():
         )  # Defaults handled by load_app_config
         # gemini_url = app_config.get("GEMINI", "url")
 
-        ## mistral Settings
-        # mistral_disabled = app_config.getboolean("mistral", "disabled")
-        # mistral_key_from_config = app_config.get("mistral", "key")
-        # mistral_api_key = (
-        #    mistral_key_from_config
-        #    if mistral_key_from_config
-        #    else os.environ.get("MISTRAL_API_KEY")
-        # )
-        # mistral_model = app_config.get(
-        #    "MISTRAL", "model"
-        # )  # Defaults handled by load_app_config
-
-        ## mistral_url = app_config.get(
-        ##    "MISTRAL", "url"
-        ## )  # Defaults handled by load_app_config
+        # Mistral AI Settings
+        mistral_disabled = app_config.getboolean("MISTRAL", "disabled")
+        mistral_key_from_config = app_config.get("MISTRAL", "key")
+        mistral_api_key = (
+            mistral_key_from_config
+            if mistral_key_from_config
+            else os.environ.get("MISTRAL_API_KEY")
+        )
+        mistral_model = app_config.get(
+            "MISTRAL", "model"
+        )  # Defaults handled by load_app_config
 
         response = None
         provider_used = None
@@ -79,7 +76,9 @@ def main():
         # Try Gemini first if not disabled and API key is available
         if not gemini_disabled:
             if gemini_api_key:
-                print(f"Attempting to use Gemini (model: {gemini_model})...")
+                print(
+                    f"Attempting to use Gemini (model: {gemini_model if gemini_model else 'gemini-2.0-flash'})..."
+                )
                 response = get_gemini_response(
                     gemini_api_key, query, system_info, gemini_model
                 )
@@ -96,7 +95,7 @@ def main():
         if response is None and not openai_disabled:
             if openai_api_key:
                 print(
-                    f"Attempting to use OpenAI (model: {openai_model}{', URL: ' + openai_url if openai_url else ''})..."
+                    f"Attempting to use OpenAI (model: {openai_model if openai_model else 'gpt-4o-mini'}{', URL: ' + openai_url if openai_url else ''})..."
                 )
                 response = get_open_ai_response(
                     openai_api_key, query, system_info, openai_model, openai_url
@@ -112,23 +111,23 @@ def main():
         ):  # Only print if it wasn't tried because it's disabled
             print("OpenAI is disabled in the configuration.")
 
-        ## Fall back to OpenAI if Gemini failed or was skipped, and if OpenAI is not disabled and API key is available
-        # if response is None and not mistral_disabled:
-        #    if mistral_api_key:
-        #        print(f"Attempting to use Mistral AI (model: {mistral_model})...")
-        #        response = get_mistral_response(
-        #            mistral_api_key, query, system_info, mistral_model
-        #        )
-        #        if response:
-        #            provider_used = "Mistral AI"
-        #    else:
-        #        print(
-        #            "Mistral API key not found in config (MISTRAL.key) or environment (MISTRAL_API_KEY). Skipping Mistral."
-        #        )
-        # elif (
-        #    response is None and mistral_disabled
-        # ):  # Only print if it wasn't tried because it's disabled
-        #    print("Mistral AI is disabled in the configuration.")
+        ## Fall back to Mistral if Gemini and OpenAI failed or was skipped
+        if response is None and not mistral_disabled:
+            if mistral_api_key:
+                print(f"Attempting to use Mistral AI (model: {mistral_model})...")
+                response = get_mistral_response(
+                    mistral_api_key, query, system_info, mistral_model
+                )
+                if response:
+                    provider_used = "Mistral AI"
+            else:
+                print(
+                    "Mistral API key not found in config (MISTRAL.key) or environment (MISTRAL_API_KEY). Skipping Mistral."
+                )
+        elif (
+            response is None and mistral_disabled
+        ):  # Only print if it wasn't tried because it's disabled
+            print("Mistral AI is disabled in the configuration.")
 
         if response is None:
             print("\nFailed to get a command from any LLM provider.")

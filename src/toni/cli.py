@@ -2,12 +2,15 @@ import argparse
 import os
 import json
 
+# Assuming 'toni' is a package or core.py is in PYTHONPATH
+# If core.py is in the same directory, use: from core import ...
 from toni.core import (
     get_system_info,
     get_gemini_response,
     get_open_ai_response,
     command_exists,
     execute_command,
+    load_app_config,  # Import the new config loader
 )
 
 
@@ -19,71 +22,150 @@ def main():
         parser.add_argument("query", nargs="+", help="Your natural language query")
         args = parser.parse_args()
 
-        # Remove trailing question mark if present
         query = " ".join(args.query).rstrip("?")
 
         system_info = get_system_info()
         print(f"Detected system: {system_info}")
 
-        google_api_key = os.environ.get("GOOGLEAI_API_KEY")
-        openai_api_key = os.environ.get("OPENAI_API_KEY")
+        app_config = load_app_config()
+
+        # OpenAI Settings
+        openai_disabled = app_config.getboolean("OPENAI", "disabled")
+        openai_key_from_config = app_config.get("OPENAI", "key")
+        openai_api_key = (
+            openai_key_from_config
+            if openai_key_from_config
+            else os.environ.get("OPENAI_API_KEY")
+        )
+        openai_model = app_config.get(
+            "OPENAI", "model"
+        )  # Defaults handled by load_app_config
+        openai_url = app_config.get(
+            "OPENAI", "url"
+        )  # Defaults handled by load_app_config
+
+        # Gemini Settings
+        gemini_disabled = app_config.getboolean("GEMINI", "disabled")
+        gemini_key_from_config = app_config.get("GEMINI", "key")
+        gemini_api_key = (
+            gemini_key_from_config
+            if gemini_key_from_config
+            else os.environ.get("GOOGLEAI_API_KEY")
+        )
+        gemini_model = app_config.get(
+            "GEMINI", "model"
+        )  # Defaults handled by load_app_config
+        # gemini_url = app_config.get('GEMINI', 'url') # Currently not used by get_gemini_response
+
         response = None
+        provider_used = None
 
-        # Try Gemini first, fall back to OpenAI
-        if google_api_key:
-            response = get_gemini_response(google_api_key, query, system_info)
+        # Try Gemini first if not disabled and API key is available
+        if not gemini_disabled:
+            if gemini_api_key:
+                print(f"Attempting to use Gemini (model: {gemini_model})...")
+                response = get_gemini_response(
+                    gemini_api_key, query, system_info, gemini_model
+                )
+                if response:
+                    provider_used = "Gemini"
+            else:
+                print(
+                    "Gemini API key not found in config (GEMINI.key) or environment (GOOGLEAI_API_KEY). Skipping Gemini."
+                )
+        else:
+            print("Gemini is disabled in the configuration.")
 
-        if response is None and openai_api_key:
-            response = get_open_ai_response(openai_api_key, query, system_info)
+        # Fall back to OpenAI if Gemini failed or was skipped, and if OpenAI is not disabled and API key is available
+        if response is None and not openai_disabled:
+            if openai_api_key:
+                print(
+                    f"Attempting to use OpenAI (model: {openai_model}{', URL: ' + openai_url if openai_url else ''})..."
+                )
+                response = get_open_ai_response(
+                    openai_api_key, query, system_info, openai_model, openai_url
+                )
+                if response:
+                    provider_used = "OpenAI"
+            else:
+                print(
+                    "OpenAI API key not found in config (OPENAI.key) or environment (OPENAI_API_KEY). Skipping OpenAI."
+                )
+        elif (
+            response is None and openai_disabled
+        ):  # Only print if it wasn't tried because it's disabled
+            print("OpenAI is disabled in the configuration.")
 
         if response is None:
-            print(
-                "Please set the GOOGLEAI_API_KEY or OPENAI_API_KEY environment variable."
-            )
+            print("\nFailed to get a command from any LLM provider.")
+            if (gemini_disabled or not gemini_api_key) and (
+                openai_disabled or not openai_api_key
+            ):
+                print(
+                    "Please check your API key configurations in ~/.toni or environment "
+                    "variables (GOOGLEAI_API_KEY, OPENAI_API_KEY) and ensure providers are not disabled."
+                )
             return
+
+        print(
+            f"Response obtained from: {provider_used if provider_used else 'Unknown'}"
+        )
 
         try:
             data = json.loads(response)
         except Exception as e:
-            print(f"An error occurred while parsing the response: {e}")
-            print(f"Raw response: {response}")
+            print(f"An error occurred while parsing the LLM response: {e}")
+            print(
+                f"Raw response from {provider_used if provider_used else 'LLM'}: {response}"
+            )
             return
 
-        if data.get("exec") == False:
-            print(data.get("exp"))
+        if data.get("exec") == False:  # Handles "exec": false
+            print(f"LLM could not generate a command: {data.get('exp')}")
             return
 
         cmd = data.get("cmd")
+        explanation = data.get("exp")
 
-        # Check if the command exists
-        if cmd and not command_exists(cmd):
+        if (
+            not cmd
+        ):  # Handles cases where cmd is empty but exec might not be explicitly false
             print(
-                f"Warning: The command '{cmd.split()[0]}' doesn't appear to be installed on your system."
+                f"LLM did not provide a command. Explanation: {explanation if explanation else 'No explanation provided.'}"
+            )
+            return
+
+        if not command_exists(cmd):
+            print(
+                f"\nWarning: The command '{cmd.split()[0]}' doesn't appear to be installed or in PATH."
             )
             print(f"Suggested command: {cmd}")
-            print(f"Explanation: {data.get('exp')}")
-            print("Please verify that this command will work on your system.")
+            print(f"Explanation: {explanation}")
+            print("Please verify and ensure the command is available before execution.")
         else:
-            print(f"Suggested command: {cmd}")
-            print(f"Explanation: {data.get('exp')}")
+            print(f"\nSuggested command: {cmd}")
+            print(f"Explanation: {explanation}")
 
         try:
-            confirmation = input("Do you want to execute this command? (y/n): ").lower()
-            if confirmation == "y" or confirmation == "":
+            confirmation = input("Do you want to execute this command? (Y/n): ").lower()
+            if confirmation == "y" or confirmation == "":  # Default to yes
                 execute_command(cmd)
             else:
                 print("Command execution cancelled.")
         except KeyboardInterrupt:
-            print("\nOperation cancelled by user.")
+            print("\nOperation cancelled by user (during confirmation).")
             return
 
     except KeyboardInterrupt:
         print("\nOperation cancelled by user.")
         return
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
 
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\nOperation cancelled by user.")
+        # This is redundant if main() already handles it, but good for robustness
+        print("\nOperation cancelled by user (main level).")

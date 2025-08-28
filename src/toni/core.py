@@ -1,7 +1,7 @@
 import os
 import subprocess
 import time
-import google as genai
+from google import genai
 from openai import OpenAI
 from mistralai import Mistral
 import platform
@@ -9,6 +9,7 @@ import shutil
 import configparser
 import re
 import json
+from google.genai import types
 
 
 system_message = """Your are a powerful terminal assistant generating a JSON containing a command line for my input.
@@ -88,24 +89,37 @@ disabled = false
 
 def get_gemini_response(api_key, prompt, system_info, model_name="gemini-2.0-flash"):
     try:
-        genai.configure(api_key=api_key)
+        client = genai.Client(api_key=api_key)
 
-        generation_config = {
-            "temperature": 0.2,
-            "top_p": 0.95,
-            "top_k": 0,
-            "max_output_tokens": 8192,
-        }
-
-        model = genai.GenerativeModel(
-            model_name=model_name, generation_config=generation_config
+        # generation_config = {
+        #    "temperature": 0.2,
+        #    "top_p": 0.95,
+        #    "top_k": 0,
+        #    "max_output_tokens": 8192,
+        # }
+        config = types.GenerateContentConfig(
+            temperature=0,
+            top_p=0.95,
+            top_k=0,
+            candidate_count=1,
+            seed=5,
+            max_output_tokens=8192,
+            stop_sequences=["STOP!"],
+            presence_penalty=0.0,
+            frequency_penalty=0.0,
         )
+
+        # model = genai.GenerativeModel(
+        #    model_name=model_name, generation_config=generation_config
+        # )
 
         formatted_system_message = system_message.format(system_info=system_info)
         combined_prompt = f"{formatted_system_message}\n\nUser request: {prompt}"
 
-        response = model.generate_content(
-            contents=[{"parts": [{"text": combined_prompt}]}]
+        response = client.models.generate_content(
+            model=model_name,
+            contents=[{"parts": [{"text": combined_prompt}]}],
+            config=config,
         )
 
         response_text = response.text

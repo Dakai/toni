@@ -1,11 +1,11 @@
 import argparse
 import os
 import json
-from termcolor import colored, cprint
+from termcolor import colored
 
 # Assuming 'toni' is a package or core.py is in PYTHONPATH
 # If core.py is in the same directory, use: from core import ...
-from core import (
+from toni.core import (
     get_system_info,
     get_gemini_response,
     get_open_ai_response,

@@ -1,13 +1,14 @@
 import os
 import subprocess
 import time
-from google import genai  # Assuming this is google.generativeai or compatible
+import google as genai
 from openai import OpenAI
 from mistralai import Mistral
 import platform
 import shutil
 import configparser
 import re
+import json
 
 
 system_message = """Your are a powerful terminal assistant generating a JSON containing a command line for my input.
@@ -87,30 +88,24 @@ disabled = false
 
 def get_gemini_response(api_key, prompt, system_info, model_name="gemini-2.0-flash"):
     try:
-        # Note: The genai.Client() initialization might vary depending on the exact Google library version/package.
-        # This code assumes the user's existing genai.Client() works as intended.
-        # If using google-generativeai, it's usually:
-        # import google.generativeai as genai
-        # genai.configure(api_key=api_key)
-        # model_service = genai.GenerativeModel(model_name)
-        # response = model_service.generate_content(...)
-        client = genai.Client(api_key=api_key)
+        genai.configure(api_key=api_key)
+
+        generation_config = {
+            "temperature": 0.2,
+            "top_p": 0.95,
+            "top_k": 0,
+            "max_output_tokens": 8192,
+        }
+
+        model = genai.GenerativeModel(
+            model_name=model_name, generation_config=generation_config
+        )
 
         formatted_system_message = system_message.format(system_info=system_info)
         combined_prompt = f"{formatted_system_message}\n\nUser request: {prompt}"
 
-        # The generation_config was commented out in the original, kept as is.
-        # generation_config = {
-        #    "temperature": 0.2,
-        #    "top_p": 0.95,
-        #    "top_k": 0,
-        #    "max_output_tokens": 1024,
-        # }
-
-        response = client.models.generate_content(
-            model=model_name,  # Use the model_name parameter
-            contents=[{"parts": [{"text": combined_prompt}]}],
-            # generation_config=generation_config, # If you intend to use this
+        response = model.generate_content(
+            contents=[{"parts": [{"text": combined_prompt}]}]
         )
 
         response_text = response.text
@@ -118,8 +113,13 @@ def get_gemini_response(api_key, prompt, system_info, model_name="gemini-2.0-fla
         if response_text:
             json_match = re.search(r"(\{.*?\})", response_text, re.DOTALL)
             if json_match:
-                return json_match.group(1)
-            return response_text  # Fallback to raw text if no JSON object found
+                try:
+                    json.loads(json_match.group(1))
+                    return json_match.group(1)
+                except json.JSONDecodeError:
+                    # The matched text is not valid JSON, fall through to returning raw text
+                    pass
+            return response_text  # Fallback to raw text if no JSON object found or if it's invalid
         return None  # Explicitly return None if response_text is empty
 
     except Exception as e:
@@ -144,6 +144,7 @@ def get_mistral_response(
                 {"role": "user", "content": prompt},
             ],
             model=model_name,  # Use the model_name parameter
+            max_tokens=4096,
         )
 
         response = None
@@ -155,7 +156,11 @@ def get_mistral_response(
             response = str(response)
             json_match = re.search(r"(\{.*?\})", response, re.DOTALL)
             if json_match:
-                return json_match.group(1)
+                try:
+                    json.loads(json_match.group(1))
+                    return json_match.group(1)
+                except json.JSONDecodeError:
+                    pass
             return response  # Fallback to raw text if no JSON object found
         return None  # Explicitly return None if response is empty
 
@@ -179,6 +184,7 @@ def get_open_ai_response(
             ],
             model=model_name,  # Use the model_name parameter
             temperature=0.2,
+            max_tokens=4096,
         )
 
         response = chat_completion.choices[0].message.content
@@ -186,7 +192,11 @@ def get_open_ai_response(
         if response:
             json_match = re.search(r"(\{.*?\})", response, re.DOTALL)
             if json_match:
-                return json_match.group(1)
+                try:
+                    json.loads(json_match.group(1))
+                    return json_match.group(1)
+                except json.JSONDecodeError:
+                    pass
             return response  # Fallback to raw text if no JSON object found
         return None  # Explicitly return None if response is empty
 

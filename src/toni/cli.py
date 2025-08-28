@@ -5,7 +5,7 @@ from termcolor import colored, cprint
 
 # Assuming 'toni' is a package or core.py is in PYTHONPATH
 # If core.py is in the same directory, use: from core import ...
-from toni.core import (
+from core import (
     get_system_info,
     get_gemini_response,
     get_open_ai_response,

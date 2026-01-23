@@ -29,21 +29,60 @@ pipx install toni-cli
 
 ## Configuration
 
-TONI requires at least one API key to function:
+TONI uses a configuration file at `~/.toni` (INI format). By default, it supports Google Gemini, OpenAI, and Mistral.
 
-1. For Google Gemini (preferred):
+### Built-in Providers
 
-```bash
-export GOOGLEAI_API_KEY='your-gemini-api-key'
+1. **Google Gemini** (Preferred):
+   ```bash
+   export GOOGLEAI_API_KEY='your-gemini-api-key'
+   ```
+
+2. **OpenAI**:
+   ```bash
+   export OPENAI_API_KEY='your-openai-api-key'
+   ```
+
+3. **Mistral**:
+   ```bash
+   export MISTRAL_API_KEY='your-mistral-api-key'
+   ```
+
+### Custom OpenAI-Compatible Providers
+
+You can add unlimited custom providers (Ollama, LM Studio, OpenRouter, etc.) by adding sections to `~/.toni`. Any section with a `url` field is treated as an OpenAI-compatible provider.
+
+#### Example: Ollama
+```ini
+[ollama]
+url = http://localhost:11434/v1
+key = ollama
+model = llama3.2:latest
+priority = 100
 ```
 
-2. For OpenAI (fallback):
-
-```bash
-export OPENAI_API_KEY='your-openai-api-key'
+#### Example: OpenRouter
+```ini
+[openrouter]
+url = https://openrouter.ai/api/v1
+key = sk-or-v1-xxx...
+model = anthropic/claude-3.5-sonnet
+priority = 80
 ```
 
-Add these lines to your shell configuration file (~/.bashrc, ~/.zshrc, etc.) to make them persistent.
+### Priority System
+
+- Custom providers are tried first, sorted by their `priority` field (higher numbers first).
+- Default priority is `50`.
+- Built-in providers have default priorities: OpenAI (`50`), Gemini (`40`), Mistral (`30`).
+- If a provider is disabled (`disabled = true`) or fails, TONI falls back to the next one in the chain.
+
+### Environment Variables
+
+For any custom provider `[my-provider]`, you can set the API key via:
+```bash
+export MY_PROVIDER_API_KEY='your-key'
+```
 
 ## Usage
 

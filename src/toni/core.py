@@ -66,18 +66,21 @@ url =
 key =
 model = gpt-4o-mini
 disabled = false
+priority = 50
 
 [GEMINI]
 url =
 key =
 model = gemini-2.0-flash
 disabled = false
+priority = 40
 
 [MISTRAL]
 url =
 key =
 model = mistral-small-latest
 disabled = false
+priority = 30
     """
     config.read_string(default_ini_content)  # Load built-in defaults
 
@@ -186,6 +189,15 @@ def get_mistral_response(
 def get_open_ai_response(
     api_key, prompt, system_info, model_name="gpt-4o-mini", base_url=None
 ):
+    """Deprecated: Use call_openai_compatible."""
+    return call_openai_compatible(
+        "OpenAI", base_url, api_key, model_name, prompt, system_info
+    )
+
+
+def call_openai_compatible(
+    provider_name, base_url, api_key, model_name, prompt, system_info
+):
     try:
         client = OpenAI(api_key=api_key, base_url=base_url if base_url else None)
 
@@ -196,7 +208,7 @@ def get_open_ai_response(
                 {"role": "system", "content": formatted_system_message},
                 {"role": "user", "content": prompt},
             ],
-            model=model_name,  # Use the model_name parameter
+            model=model_name,
             temperature=0.2,
             max_tokens=4096,
         )
@@ -211,12 +223,59 @@ def get_open_ai_response(
                     return json_match.group(1)
                 except json.JSONDecodeError:
                     pass
-            return response  # Fallback to raw text if no JSON object found
-        return None  # Explicitly return None if response is empty
+            return response
+        return None
 
     except Exception as e:
-        print(f"An error occurred with OpenAI (model: {model_name}): {e}")
+        print(f"An error occurred with {provider_name} (model: {model_name}): {e}")
         return None
+
+
+def discover_providers(config):
+    custom_providers = []
+    native_providers = []
+
+    for section in config.sections():
+        try:
+            if config.getboolean(section, "disabled", fallback=False):
+                continue
+        except ValueError:
+            continue
+
+        url = config.get(section, "url", fallback="").strip()
+
+        provider_data = {
+            "name": section,
+            "url": url,
+            "key": config.get(section, "key", fallback=""),
+            "model": config.get(section, "model", fallback=""),
+            "priority": config.getint(section, "priority", fallback=50),
+        }
+
+        if url:
+            custom_providers.append(provider_data)
+        elif section == "OPENAI":
+            provider_data["url"] = "https://api.openai.com/v1"
+            if not provider_data["model"]:
+                provider_data["model"] = "gpt-4o-mini"
+            custom_providers.append(provider_data)
+        elif section == "GEMINI":
+            if not provider_data["model"]:
+                provider_data["model"] = "gemini-2.0-flash"
+            native_providers.append(provider_data)
+        elif section == "MISTRAL":
+            if not provider_data["model"]:
+                provider_data["model"] = "mistral-small-latest"
+            native_providers.append(provider_data)
+        else:
+            continue
+
+    custom_providers.sort(key=lambda p: p["priority"], reverse=True)
+
+    return {
+        "custom": custom_providers,
+        "native": native_providers,
+    }
 
 
 def write_to_zsh_history(command):

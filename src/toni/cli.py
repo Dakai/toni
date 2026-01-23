@@ -17,13 +17,23 @@ from toni.core import (
 )
 
 
+__version__ = "0.1.13"
+
+
 def main():
     try:
         parser = argparse.ArgumentParser(
             description="TONI: Terminal Operation Natural Instruction"
         )
-        parser.add_argument("query", nargs="+", help="Your natural language query")
+        parser.add_argument(
+            "-v", "--version", action="version", version=f"toni {__version__}"
+        )
+        parser.add_argument("query", nargs="*", help="Your natural language query")
         args = parser.parse_args()
+
+        if not args.query:
+            parser.print_help()
+            return
 
         query = " ".join(args.query).rstrip("?")
 

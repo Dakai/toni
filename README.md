@@ -12,9 +12,10 @@ TONI was inspired by [YAI (Yet Another Interpreter)](https://github.com/ekzhang/
 
 - Translates natural language to terminal commands
 - Prioritizes Google Gemini AI with OpenAI fallback
-- System-aware: Detects whether you're on Linux (Arch, Debian, etc.), macOS, or other systems
+- **Cross-platform**: Works on Linux, macOS, and Windows
+- System-aware: Detects your OS and generates platform-appropriate commands
 - Verifies command availability before execution
-- Saves executed commands to ZSH history (when using ZSH)
+- Saves executed commands to shell history (ZSH on Unix, custom history on Windows)
 - Simple to use and install
 
 ## Installation
@@ -26,6 +27,20 @@ pip install toni-cli
 # Or with pipx (recommended)
 pipx install toni-cli
 ```
+
+### Windows Installation
+
+TONI works on Windows via pip or pipx:
+
+```powershell
+# Using pip
+pip install toni-cli
+
+# Or with pipx (recommended)
+pipx install toni-cli
+```
+
+**Note**: On Windows, TONI generates Windows-native commands (CMD/PowerShell) and saves command history to `~/.toni_history`.
 
 ## Configuration
 
@@ -104,6 +119,7 @@ toni find the largest files in this directory
 
 ## Examples
 
+### Linux/macOS
 ```
 $ toni find all python files containing the word "error"
 
@@ -111,6 +127,16 @@ Detected system: Linux (arch)
 Suggested command: grep -r "error" --include="*.py" .
 Explanation: Search recursively for the word "error" in all Python files in the current directory
 Do you want to execute this command? (y/n):
+```
+
+### Windows
+```
+> toni find all python files containing the word "error"
+
+Detected system: Windows 10 (10.0.19045)
+Suggested command: findstr /s /i "error" *.py
+Explanation: Search for "error" in all Python files recursively
+Do you want to execute this command? (Y/n):
 ```
 
 ## Development

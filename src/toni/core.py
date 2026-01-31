@@ -12,7 +12,11 @@ import json
 from google.genai import types
 
 
-system_message = """Your are a powerful terminal assistant generating a JSON containing a command line for my input.
+def get_system_message(system_info):
+    """Generate system message with platform-specific examples."""
+
+    # Base message structure
+    base_message = """Your are a powerful terminal assistant generating a JSON containing a command line for my input.
 You will always reply using the following json structure: {{"cmd":"the command", "exp": "some explanation", "exec": true}}.
 Your answer will always only contain the json structure, never add any advice or supplementary detail or information,
 even if I asked the same question before.
@@ -22,13 +26,36 @@ The field exec will contain true if you managed to generate an executable comman
 
 The host system is using {system_info}. Please ensure commands are compatible with this environment.
 
-Examples:
+Examples:"""
+
+    # Platform-specific examples
+    if "Windows" in system_info:
+        examples = """
+Me: list all files in my home dir
+You: {{"cmd":"dir %USERPROFILE%", "exp": "list all files in your home directory", "exec": true}}
+Me: find all PDF files in current directory
+You: {{"cmd":"dir *.pdf /s", "exp": "search for all PDF files in current directory and subdirectories", "exec": true}}
+Me: show my disk usage
+You: {{"cmd":"wmic logicaldisk get size,freespace,caption", "exp": "display disk space information for all drives", "exec": true}}
+Me: what processes are using the most memory
+You: {{"cmd":"tasklist /fo csv | sort /r", "exp": "list all processes sorted by memory usage", "exec": true}}
+Me: how are you ?
+You: {{"cmd":"", "exp": "I'm good thanks but I cannot generate a command for this.", "exec": false}}"""
+    else:
+        # Unix/Linux/macOS examples
+        examples = """
 Me: list all files in my home dir
 You: {{"cmd":"ls ~", "exp": "list all files in your home dir", "exec": true}}
 Me: list all pods of all namespaces
 You: {{"cmd":"kubectl get pods --all-namespaces", "exp": "list pods form all k8s namespaces", "exec": true}}
+Me: show my disk usage
+You: {{"cmd":"df -h", "exp": "display disk space usage in human-readable format", "exec": true}}
+Me: what processes are using the most memory
+You: {{"cmd":"ps aux --sort=-%mem | head", "exp": "show top processes by memory usage", "exec": true}}
 Me: how are you ?
 You: {{"cmd":"", "exp": "I'm good thanks but I cannot generate a command for this.", "exec": false}}"""
+
+    return base_message + examples
 
 
 def get_system_info():
@@ -50,7 +77,13 @@ def get_system_info():
     elif system == "Darwin":
         return "macOS"
     elif system == "Windows":
-        return "Windows"
+        # Provide more context for Windows
+        try:
+            version = platform.version()
+            release = platform.release()
+            return f"Windows {release} ({version})"
+        except Exception:
+            return "Windows"
     else:
         return system
 
@@ -116,7 +149,9 @@ def get_gemini_response(api_key, prompt, system_info, model_name="gemini-2.0-fla
         #    model_name=model_name, generation_config=generation_config
         # )
 
-        formatted_system_message = system_message.format(system_info=system_info)
+        formatted_system_message = get_system_message(system_info).format(
+            system_info=system_info
+        )
         combined_prompt = f"{formatted_system_message}\n\nUser request: {prompt}"
 
         response = client.models.generate_content(
@@ -153,7 +188,9 @@ def get_mistral_response(
     try:
         client = Mistral(api_key=api_key)
 
-        formatted_system_message = system_message.format(system_info=system_info)
+        formatted_system_message = get_system_message(system_info).format(
+            system_info=system_info
+        )
 
         chat_completion = client.chat.complete(
             messages=[
@@ -201,7 +238,9 @@ def call_openai_compatible(
     try:
         client = OpenAI(api_key=api_key, base_url=base_url if base_url else None)
 
-        formatted_system_message = system_message.format(system_info=system_info)
+        formatted_system_message = get_system_message(system_info).format(
+            system_info=system_info
+        )
 
         chat_completion = client.chat.completions.create(
             messages=[
@@ -279,19 +318,52 @@ def discover_providers(config):
 
 
 def write_to_zsh_history(command):
+    """Write command to ZSH history (Unix/Linux/macOS)."""
     try:
         zsh_history_file = os.path.join(os.path.expanduser("~"), ".zsh_history")
         if not os.path.exists(os.path.dirname(zsh_history_file)):
-            print(
-                f"Warning: ZSH history directory {os.path.dirname(zsh_history_file)} does not exist. Skipping history write."
-            )
-            return
+            return  # Silently skip if ZSH not configured
         current_time = int(time.time())
         timestamped_command = f": {current_time}:0;{command}"
         with open(zsh_history_file, "a") as f:
             f.write(timestamped_command + "\n")
-    except Exception as e:
-        print(f"An error occurred while writing to ZSH history: {e}")
+    except Exception:
+        pass  # Silently fail - history writing is not critical
+
+
+def write_to_powershell_history(command):
+    """Write command to PowerShell history (Windows)."""
+    try:
+        # PowerShell history is stored in a different location
+        # The actual history file is managed by PSReadLine module
+        # We can add to the command history by writing to the console history buffer
+        # or by using a custom approach
+        ps_history_dir = os.path.join(
+            os.path.expanduser("~"),
+            "AppData",
+            "Roaming",
+            "Microsoft",
+            "Windows",
+            "PowerShell",
+            "PSReadLine",
+        )
+        if os.path.exists(ps_history_dir):
+            # PowerShell history file format is complex, so we'll use a simpler approach
+            # Write to a custom toni history file that users can reference
+            toni_history_file = os.path.join(os.path.expanduser("~"), ".toni_history")
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            with open(toni_history_file, "a", encoding="utf-8") as f:
+                f.write(f"[{timestamp}] {command}\n")
+    except Exception:
+        pass  # Silently fail - history writing is not critical
+
+
+def write_command_history(command, system_info):
+    """Write command to appropriate shell history based on system."""
+    if "Windows" in system_info:
+        write_to_powershell_history(command)
+    else:
+        write_to_zsh_history(command)
 
 
 def reload_zsh_history():  # This function was unused (commented out call)
@@ -307,14 +379,14 @@ def reload_zsh_history():  # This function was unused (commented out call)
         print(f"An error occurred while reloading .zshrc: {e}")
 
 
-def execute_command(command):
+def execute_command(command, system_info=""):
     try:
         result = subprocess.run(
             command, shell=True, check=True, text=True, capture_output=True
         )
         print("Command output:")
         print(result.stdout)
-        write_to_zsh_history(command)
+        write_command_history(command, system_info)
         # reload_zsh_history() # Call was commented out in original
     except subprocess.CalledProcessError as e:
         print(f"An error occurred while executing the command: {e}")

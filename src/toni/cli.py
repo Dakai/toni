@@ -155,7 +155,7 @@ def main():
         try:
             confirmation = input("Do you want to execute the command? (Y/n): ").lower()
             if confirmation == "y" or confirmation == "":  # Default to yes
-                execute_command(cmd)
+                execute_command(cmd, system_info)
             else:
                 print(colored("Command execution cancelled.", "red"))
         except KeyboardInterrupt:

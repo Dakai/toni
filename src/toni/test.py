@@ -1,4 +1,10 @@
-from mistralai import Mistral
+try:
+    from mistralai import Mistral
+except ImportError:
+    try:
+        from mistralai.client import Mistral
+    except ImportError:
+        Mistral = None
 from termcolor import colored, cprint
 
 
@@ -8,6 +14,9 @@ def get_mistral_response(
     prompt="list all files in my home dir",
     system_info="Manjaro Linux",
 ):
+    if Mistral is None:
+        print(f"Error: The 'mistralai' package is not installed correctly or version is incompatible.")
+        return None
     try:
         client = Mistral(api_key=api_key)
 

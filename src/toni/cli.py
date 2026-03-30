@@ -17,7 +17,7 @@ from toni.core import (
 )
 
 
-__version__ = "0.1.15"
+__version__ = "0.1.18"
 
 
 def main():
@@ -104,6 +104,21 @@ def main():
                     )
                     if response:
                         provider_used = "Mistral"
+                        break
+
+                elif provider["name"] == "OPENROUTER":
+                    api_key = provider["key"] or os.environ.get("OPENROUTER_API_KEY")
+                    if not api_key:
+                        print(
+                            "OpenRouter API key not found in config (OPENROUTER.key) or environment (OPENROUTER_API_KEY). Skipping."
+                        )
+                        continue
+
+                    response = get_openrouter_response(
+                        api_key, query, system_info, provider["model"]
+                    )
+                    if response:
+                        provider_used = "OpenRouter"
                         break
 
         if response is None:

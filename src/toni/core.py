@@ -1,15 +1,32 @@
 import os
 import subprocess
 import time
-from google import genai
-from openai import OpenAI
-from mistralai import Mistral
+try:
+    from google import genai
+except ImportError:
+    genai = None
+
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
+try:
+    from mistralai import Mistral
+except ImportError:
+    try:
+        from mistralai.client import Mistral
+    except ImportError:
+        # If neither works, it might not be installed, but we handle that in cli.py/core.py
+        Mistral = None
 import platform
 import shutil
 import configparser
 import re
 import json
-from google.genai import types
+try:
+    from google.genai import types
+except ImportError:
+    types = None
 
 
 def get_system_message(system_info):
@@ -124,6 +141,9 @@ priority = 30
 
 
 def get_gemini_response(api_key, prompt, system_info, model_name="gemini-2.0-flash"):
+    if genai is None:
+        print(f"Error: The 'google-genai' package is not installed correctly or version is incompatible.")
+        return None
     try:
         client = genai.Client(api_key=api_key)
 
@@ -185,6 +205,9 @@ def get_mistral_response(
     system_info,
     model_name="mistral-small-latest",
 ):
+    if Mistral is None:
+        print(f"Error: The 'mistralai' package is not installed correctly or version is incompatible.")
+        return None
     try:
         client = Mistral(api_key=api_key)
 
@@ -235,6 +258,9 @@ def get_open_ai_response(
 def call_openai_compatible(
     provider_name, base_url, api_key, model_name, prompt, system_info
 ):
+    if OpenAI is None:
+        print(f"Error: The 'openai' package is not installed correctly or version is incompatible.")
+        return None
     try:
         client = OpenAI(api_key=api_key, base_url=base_url if base_url else None)
 
@@ -267,6 +293,50 @@ def call_openai_compatible(
 
     except Exception as e:
         print(f"An error occurred with {provider_name} (model: {model_name}): {e}")
+        return None
+
+
+def get_openrouter_response(
+    api_key, prompt, system_info, model_name="openrouter/free"
+):
+    try:
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        formatted_system_message = get_system_message(system_info).format(
+            system_info=system_info
+        )
+
+        payload = {
+            "model": model_name,
+            "messages": [
+                {"role": "system", "content": formatted_system_message},
+                {"role": "user", "content": prompt},
+            ],
+            "reasoning": {"enabled": True},
+        }
+
+        response = requests.post(url, headers=headers, data=json.dumps(payload))
+        response.raise_for_status()
+        data = response.json()
+
+        if "choices" in data and len(data["choices"]) > 0:
+            content = data["choices"][0]["message"].get("content")
+            if content:
+                json_match = re.search(r"(\{.*?\})", content, re.DOTALL)
+                if json_match:
+                    try:
+                        json.loads(json_match.group(1))
+                        return json_match.group(1)
+                    except json.JSONDecodeError:
+                        pass
+                return content
+        return None
+
+    except Exception as e:
+        print(f"An error occurred with OpenRouter (model: {model_name}): {e}")
         return None
 
 
@@ -305,6 +375,10 @@ def discover_providers(config):
         elif section == "MISTRAL":
             if not provider_data["model"]:
                 provider_data["model"] = "mistral-small-latest"
+            native_providers.append(provider_data)
+        elif section == "OPENROUTER":
+            if not provider_data["model"]:
+                provider_data["model"] = "openrouter/free"
             native_providers.append(provider_data)
         else:
             continue

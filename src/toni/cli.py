@@ -9,6 +9,7 @@ from toni.core import (
     get_system_info,
     get_gemini_response,
     get_mistral_response,
+    get_openrouter_response,
     call_openai_compatible,
     discover_providers,
     command_exists,
@@ -17,7 +18,7 @@ from toni.core import (
 )
 
 
-__version__ = "0.1.18"
+__version__ = "0.1.20"
 
 
 def main():
@@ -128,9 +129,9 @@ def main():
             )
             return
 
-        # print(
-        #    f"Response obtained from: {provider_used if provider_used else 'Unknown'}"
-        # )
+        print(
+            f"Response obtained from: {provider_used if provider_used else 'Unknown'}"
+        )
 
         try:
             data = json.loads(response)

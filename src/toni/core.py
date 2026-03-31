@@ -24,6 +24,10 @@ import configparser
 import re
 import json
 try:
+    import requests
+except ImportError:
+    requests = None
+try:
     from google.genai import types
 except ImportError:
     types = None
@@ -299,6 +303,9 @@ def call_openai_compatible(
 def get_openrouter_response(
     api_key, prompt, system_info, model_name="openrouter/free"
 ):
+    if requests is None:
+        print(f"Error: The 'requests' package is not installed correctly or version is incompatible.")
+        return None
     try:
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {

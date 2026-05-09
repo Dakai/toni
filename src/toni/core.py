@@ -135,6 +135,13 @@ key =
 model = mistral-small-latest
 disabled = false
 priority = 30
+
+[DEEPSEEK]
+url =
+key =
+model = deepseek-v4-flash
+disabled = false
+priority = 25
     """
     config.read_string(default_ini_content)  # Load built-in defaults
 
@@ -387,6 +394,11 @@ def discover_providers(config):
             if not provider_data["model"]:
                 provider_data["model"] = "openrouter/free"
             native_providers.append(provider_data)
+        elif section == "DEEPSEEK":
+            provider_data["url"] = "https://api.deepseek.com/v1"
+            if not provider_data["model"]:
+                provider_data["model"] = "deepseek-v4-flash"
+            custom_providers.append(provider_data)
         else:
             continue
 

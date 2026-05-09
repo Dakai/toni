@@ -56,6 +56,18 @@ key = mis-123
         self.assertIn("GEMINI", native_names)
         self.assertIn("MISTRAL", native_names)
 
+    def test_discover_deepseek(self):
+        config = ConfigParser()
+        config.read_string("""
+[DEEPSEEK]
+key = ds-123
+        """)
+        providers = discover_providers(config)
+        self.assertEqual(len(providers["custom"]), 1)
+        self.assertEqual(providers["custom"][0]["name"], "DEEPSEEK")
+        self.assertEqual(providers["custom"][0]["url"], "https://api.deepseek.com/v1")
+        self.assertEqual(providers["custom"][0]["model"], "deepseek-v4-flash")
+
     def test_disabled_providers(self):
         config = ConfigParser()
         config.read_string("""

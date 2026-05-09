@@ -18,7 +18,7 @@ from toni.core import (
 )
 
 
-__version__ = "0.1.20"
+__version__ = "0.1.21"
 
 
 def main():
@@ -55,6 +55,10 @@ def main():
                 if provider["name"] == "OPENAI":
                     print(
                         "OpenAI API key not found in config (OPENAI.key) or environment (OPENAI_API_KEY). Skipping."
+                    )
+                elif provider["name"] == "DEEPSEEK":
+                    print(
+                        "DeepSeek API key not found in config (DEEPSEEK.key) or environment (DEEPSEEK_API_KEY). Skipping."
                     )
                 else:
                     print(

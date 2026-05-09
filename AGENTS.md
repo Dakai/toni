@@ -37,6 +37,19 @@ The project uses the standard `unittest` framework:
 python -m unittest discover tests
 ```
 
+### Releasing to PyPI
+To release a new version of TONI:
+1. Update the version number in `pyproject.toml` and `src/toni/cli.py`.
+2. Build the package:
+   ```bash
+   rm -rf dist/ build/ *.egg-info
+   python3 -m build
+   ```
+3. Upload to PyPI:
+   ```bash
+   python3 -m twine upload dist/*
+   ```
+
 ## Development Conventions
 
 - **LLM Communication:** TONI expects LLMs to return a specific JSON structure:

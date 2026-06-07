@@ -18,7 +18,7 @@ from toni.core import (
 )
 
 
-__version__ = "0.1.21"
+__version__ = "0.1.22"
 
 
 def main():
@@ -48,17 +48,16 @@ def main():
         provider_used = None
 
         for provider in providers["custom"]:
-            env_key_name = f"{provider['name'].upper()}_API_KEY"
-            api_key = provider["key"] or os.environ.get(env_key_name)
+            if provider["env_key"]:
+                api_key = os.environ.get(provider["env_key"])
+            else:
+                env_key_name = f"{provider['name'].upper()}_API_KEY"
+                api_key = provider["key"] or os.environ.get(env_key_name)
 
             if not api_key:
-                if provider["name"] == "OPENAI":
+                if provider["env_key"]:
                     print(
-                        "OpenAI API key not found in config (OPENAI.key) or environment (OPENAI_API_KEY). Skipping."
-                    )
-                elif provider["name"] == "DEEPSEEK":
-                    print(
-                        "DeepSeek API key not found in config (DEEPSEEK.key) or environment (DEEPSEEK_API_KEY). Skipping."
+                        f"API key not found in environment ({provider['env_key']}) for provider '{provider['name']}'. Skipping."
                     )
                 else:
                     print(
@@ -82,11 +81,19 @@ def main():
         if response is None:
             for provider in providers["native"]:
                 if provider["name"] == "GEMINI":
-                    api_key = provider["key"] or os.environ.get("GOOGLEAI_API_KEY")
+                    if provider["env_key"]:
+                        api_key = os.environ.get(provider["env_key"])
+                    else:
+                        api_key = provider["key"] or os.environ.get("GOOGLEAI_API_KEY")
                     if not api_key:
-                        print(
-                            "Gemini API key not found in config (GEMINI.key) or environment (GOOGLEAI_API_KEY). Skipping."
-                        )
+                        if provider["env_key"]:
+                            print(
+                                f"Gemini API key not found in environment ({provider['env_key']}). Skipping."
+                            )
+                        else:
+                            print(
+                                "Gemini API key not found in config (GEMINI.key) or environment (GOOGLEAI_API_KEY). Skipping."
+                            )
                         continue
 
                     response = get_gemini_response(
@@ -97,11 +104,19 @@ def main():
                         break
 
                 elif provider["name"] == "MISTRAL":
-                    api_key = provider["key"] or os.environ.get("MISTRAL_API_KEY")
+                    if provider["env_key"]:
+                        api_key = os.environ.get(provider["env_key"])
+                    else:
+                        api_key = provider["key"] or os.environ.get("MISTRAL_API_KEY")
                     if not api_key:
-                        print(
-                            "Mistral API key not found in config (MISTRAL.key) or environment (MISTRAL_API_KEY). Skipping."
-                        )
+                        if provider["env_key"]:
+                            print(
+                                f"Mistral API key not found in environment ({provider['env_key']}). Skipping."
+                            )
+                        else:
+                            print(
+                                "Mistral API key not found in config (MISTRAL.key) or environment (MISTRAL_API_KEY). Skipping."
+                            )
                         continue
 
                     response = get_mistral_response(
@@ -112,11 +127,19 @@ def main():
                         break
 
                 elif provider["name"] == "OPENROUTER":
-                    api_key = provider["key"] or os.environ.get("OPENROUTER_API_KEY")
+                    if provider["env_key"]:
+                        api_key = os.environ.get(provider["env_key"])
+                    else:
+                        api_key = provider["key"] or os.environ.get("OPENROUTER_API_KEY")
                     if not api_key:
-                        print(
-                            "OpenRouter API key not found in config (OPENROUTER.key) or environment (OPENROUTER_API_KEY). Skipping."
-                        )
+                        if provider["env_key"]:
+                            print(
+                                f"OpenRouter API key not found in environment ({provider['env_key']}). Skipping."
+                            )
+                        else:
+                            print(
+                                "OpenRouter API key not found in config (OPENROUTER.key) or environment (OPENROUTER_API_KEY). Skipping."
+                            )
                         continue
 
                     response = get_openrouter_response(

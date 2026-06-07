@@ -118,6 +118,7 @@ def load_app_config():
 [OPENAI]
 url =
 key =
+env-key =
 model = gpt-4o-mini
 disabled = false
 priority = 50
@@ -125,6 +126,7 @@ priority = 50
 [GEMINI]
 url =
 key =
+env-key =
 model = gemini-2.0-flash
 disabled = false
 priority = 40
@@ -132,6 +134,7 @@ priority = 40
 [MISTRAL]
 url =
 key =
+env-key =
 model = mistral-small-latest
 disabled = false
 priority = 30
@@ -139,6 +142,7 @@ priority = 30
 [DEEPSEEK]
 url =
 key =
+env-key =
 model = deepseek-v4-flash
 disabled = false
 priority = 25
@@ -371,6 +375,7 @@ def discover_providers(config):
             "name": section,
             "url": url,
             "key": config.get(section, "key", fallback=""),
+            "env_key": config.get(section, "env-key", fallback=""),
             "model": config.get(section, "model", fallback=""),
             "priority": config.getint(section, "priority", fallback=50),
         }

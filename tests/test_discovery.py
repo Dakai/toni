@@ -78,6 +78,27 @@ disabled = true
         providers = discover_providers(config)
         self.assertEqual(len(providers["custom"]), 0)
 
+    def test_env_key_read_from_config(self):
+        config = ConfigParser()
+        config.read_string("""
+[ollama]
+url = http://localhost:11434/v1
+key =
+env-key = MY_OLLAMA_KEY
+        """)
+        providers = discover_providers(config)
+        self.assertEqual(len(providers["custom"]), 1)
+        self.assertEqual(providers["custom"][0]["env_key"], "MY_OLLAMA_KEY")
+
+    def test_env_key_defaults_to_empty(self):
+        config = ConfigParser()
+        config.read_string("""
+[ollama]
+url = http://localhost:11434/v1
+key = sk-abc
+        """)
+        providers = discover_providers(config)
+        self.assertEqual(providers["custom"][0]["env_key"], "")
 
 if __name__ == "__main__":
     unittest.main()

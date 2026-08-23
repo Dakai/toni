@@ -10,10 +10,12 @@ from toni.core import (
     command_exists,
     execute_command,
     load_app_config,
+    get_theme,
+    paint,
 )
 
 
-__version__ = "0.1.24"
+__version__ = "0.1.28"
 
 
 def main():
@@ -39,13 +41,15 @@ def main():
             query = query[1:-1].strip()
 
         system_info = get_system_info()
-        print(f"Detected system: {system_info}")
+        theme = get_theme()
+        print(paint(theme, "label", "Detected system:") + " " + system_info)
 
         app_config = load_app_config()
         providers = discover_providers(app_config)
 
         response = None
         provider_used = None
+        model_used = None
 
         # unified priority-ordered list (litellm handles all providers)
         all_providers = sorted(
@@ -57,6 +61,7 @@ def main():
             response = get_llm_response(provider, query, system_info)
             if response:
                 provider_used = provider["name"]
+                model_used = provider.get("model")
                 break
             # missing-key hint (get_llm_response returns None silently for missing key)
             if provider.get("env_key"):
@@ -78,7 +83,9 @@ def main():
             return
 
         print(
-            f"Response obtained from: {provider_used if provider_used else 'Unknown'}"
+            paint(theme, "label", "Response from:")
+            + " "
+            + (f"{provider_used}/{model_used}" if provider_used else "Unknown")
         )
 
         try:
@@ -89,10 +96,8 @@ def main():
                 f"Raw response from {provider_used if provider_used else 'LLM'}: {response}"
             )
             return
-
         if data.get("exec") == False:  # Handles "exec": false
-            print(f"LLM could not generate a command: {data.get('exp')}")
-            return
+            print(paint(theme, "warn", f"LLM could not generate a command: {data.get('exp')}"))
 
         cmd = data.get("cmd")
         explanation = data.get("exp")
@@ -104,24 +109,21 @@ def main():
                 f"LLM did not provide a command. Explanation: {explanation if explanation else 'No explanation provided.'}"
             )
             return
-
         if not command_exists(cmd):
-            print(
-                f"\nWarning: The command '{colored(cmd.split()[0], 'red')}' doesn't appear to be installed or in PATH."
-            )
-            print(f"Suggested command: {colored(cmd, 'blue')}")
-            print(f"Explanation: {colored(explanation, 'blue')}")
+            print(paint(theme, "warn", f"Warning: The command '{cmd.split()[0]}' doesn't appear to be installed or in PATH."))
+            print(paint(theme, "label", "Suggested command:") + " " + colored(cmd, "white"))
+            print(paint(theme, "label", "Explanation:") + " " + paint(theme, "value", explanation))
             # print("Please verify and ensure the command is available before execution.")
         else:
-            print(f"\nSuggested command: {cmd}")
-            print(f"Explanation: {explanation}")
+            print(paint(theme, "label", "Suggested command:") + " " + colored(cmd, "white"))
+            print(paint(theme, "label", "Explanation:") + " " + paint(theme, "value", explanation))
 
         try:
-            confirmation = input("Do you want to execute the command? (Y/n): ").lower()
+            confirmation = input(paint(theme, "prompt", "Do you want to execute the command? (Y/n): ")).lower()
             if confirmation == "y" or confirmation == "":  # Default to yes
                 execute_command(cmd, system_info)
             else:
-                print(colored("Command execution cancelled.", "red"))
+                print(paint(theme, "warn", "Command execution cancelled."))
         except KeyboardInterrupt:
             print(
                 colored("\nOperation cancelled by user (during confirmation).", "red")

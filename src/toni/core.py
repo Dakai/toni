@@ -7,6 +7,84 @@ import shutil
 import configparser
 import re
 import json
+from termcolor import colored
+
+def _terminal_bg_dark():
+    """Query the terminal background color via OSC 11. Returns True (dark),
+    False (light), or None when the terminal doesn't answer."""
+    import sys
+    try:
+        import select, termios, tty
+        if not sys.stdin.isatty() or not sys.stdout.isatty():
+            return None
+        old = termios.tcgetattr(sys.stdin)
+        tty.setcbreak(sys.stdin.fileno())
+        sys.stdout.write("\x1b]11;?\x1b\\")
+        sys.stdout.flush()
+        buf = ""
+        deadline = time.time() + 0.3
+        quiet = 0.05   # reply is considered complete after this much silence
+        last = time.time()
+        while time.time() < deadline:
+            r, _, _ = select.select([sys.stdin], [], [], 0.02)
+            if r:
+                buf += sys.stdin.read(1)
+                last = time.time()
+                if buf.endswith("\x07") or buf.endswith("\x1b\\"):
+                    break
+            elif buf and time.time() - last >= quiet:
+                break
+        # drain any straggler bytes so they never leak into the shell prompt
+        while select.select([sys.stdin], [], [], 0.02)[0]:
+            if not sys.stdin.read(1):
+                break
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old)
+        m = re.search(r"rgb:([0-9a-fA-F]+)/([0-9a-fA-F]+)/([0-9a-fA-F]+)", buf)
+        if not m:
+            return None
+        # OSC reports up to 16 bits per channel; normalize by max component width
+        vals = [int(v, 16) for v in m.groups()]
+        scale = max(int(m.group(1), 16), int(m.group(2), 16), int(m.group(3), 16)) or 1
+        lum = sum(vals) / (3 * scale)
+        return lum < 0.5
+    except Exception:
+        return None
+
+
+
+_THEME = None
+def get_theme():
+    """Color palette tuned for the current terminal background.
+    Respects NO_COLOR; falls back to a dark-terminal palette.
+    Cached per process so the OSC query runs at most once."""
+    global _THEME
+    if _THEME is not None:
+        return _THEME
+    if os.environ.get("NO_COLOR"):
+        _THEME = {"label": None, "value": None, "warn": None, "ok": None, "prompt": None}
+    elif _terminal_bg_dark() is False:  # light terminal
+        _THEME = {
+            "label": ("blue", ["bold"]),
+            "value": ("grey", []),
+            "warn": ("red", ["bold"]),
+            "ok": ("green", []),
+            "prompt": ("magenta", ["bold"]),
+        }
+    else:  # dark terminal (default)
+        _THEME = {
+            "label": ("cyan", ["bold"]),
+            "value": ("white", []),
+            "warn": ("yellow", ["bold"]),
+            "ok": ("green", []),
+            "prompt": ("magenta", ["bold"]),
+        }
+    return _THEME
+
+def paint(theme, key, text):
+    c = theme.get(key)
+    if not c or not c[0]:
+        return text
+    return colored(text, c[0], attrs=c[1])
 
 try:
     import litellm
@@ -190,23 +268,33 @@ def get_llm_response(provider, prompt, system_info):
     }
     if provider.get("url"):
         kwargs["api_base"] = provider["url"]
-    try:
-        resp = litellm.completion(**kwargs)
-        content = resp.choices[0].message.content if resp.choices else None
-        if not content:
-            return None
-        content = str(content)
-        m = re.search(r"(\{.*?\})", content, re.DOTALL)
-        if m:
-            try:
-                json.loads(m.group(1))
-                return m.group(1)
-            except json.JSONDecodeError:
-                pass
-        return content
-    except Exception as e:
-        print(f"An error occurred with {provider['name']} (model: {provider['model']}): {e}")
-        return None
+    # ponytail: fixed 3 attempts/1s backoff — some gateways (opencode zen)
+    # intermittently return spurious 401 "Model is not supported"; raise the
+    # cap or use exponential backoff if that proves too weak.
+    last_err = None
+    for attempt in range(3):
+        try:
+            resp = litellm.completion(**kwargs)
+            content = resp.choices[0].message.content if resp.choices else None
+            if not content:
+                return None
+            content = str(content)
+            m = re.search(r"(\{.*?\})", content, re.DOTALL)
+            if m:
+                try:
+                    json.loads(m.group(1))
+                    return m.group(1)
+                except json.JSONDecodeError:
+                    pass
+            return content
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            last_err = e
+            if attempt < 2:
+                time.sleep(1)
+    print(f"An error occurred with {provider['name']} (model: {provider['model']}): {last_err}")
+    return None
 
 
 # --- deprecated shims (keep import compatibility) ---
@@ -351,20 +439,26 @@ def reload_zsh_history():  # This function was unused (commented out call)
 
 
 def execute_command(command, system_info=""):
+    theme = get_theme()
     try:
         result = subprocess.run(
             command, shell=True, check=True, text=True, capture_output=True
         )
-        print("Command output:")
-        print(result.stdout)
+        if not (result.stdout or "").strip():
+            print(paint(theme, "ok", "Done"))
+        else:
+            print(paint(theme, "label", "Command output:"))
+            print(result.stdout.rstrip("\n"))
         write_command_history(command, system_info)
         # reload_zsh_history() # Call was commented out in original
     except subprocess.CalledProcessError as e:
-        print(f"An error occurred while executing the command: {e}")
-        print("Error output:")
+        print(paint(theme, "warn", f"An error occurred while executing the command: {e}"))
+        print(paint(theme, "warn", "Error output:"))
         print(e.stderr)
     except FileNotFoundError:  # Handle command not found at execution time too
-        print(f"Error: Command not found: {command.split()[0]}")
+        print(paint(theme, "warn", f"Error: Command not found: {command.split()[0]}"))
+
+
 
 
 def command_exists(command):

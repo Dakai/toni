@@ -376,16 +376,25 @@ def discover_providers(config):
     }
 
 
-def write_to_zsh_history(command):
-    """Write command to ZSH history (Unix/Linux/macOS)."""
+def write_to_shell_history(command):
+    """Append command to the user's shell history file."""
     try:
-        zsh_history_file = os.path.join(os.path.expanduser("~"), ".zsh_history")
-        if not os.path.exists(os.path.dirname(zsh_history_file)):
-            return  # Silently skip if ZSH not configured
-        current_time = int(time.time())
-        timestamped_command = f": {current_time}:0;{command}"
-        with open(zsh_history_file, "a") as f:
-            f.write(timestamped_command + "\n")
+        histfile = os.environ.get("HISTFILE")
+        if not histfile:
+            shell = os.path.basename(os.environ.get("SHELL", ""))
+            if shell == "zsh":
+                histfile = os.path.join(os.path.expanduser("~"), ".zsh_history")
+            elif shell == "bash":
+                histfile = os.path.join(os.path.expanduser("~"), ".bash_history")
+            else:  # fish etc. use their own formats; don't corrupt them
+                return
+        if not os.path.exists(histfile):
+            return  # Silently skip if the shell isn't configured
+        line = command
+        if os.path.basename(os.environ.get("SHELL", "")) == "zsh":
+            line = f": {int(time.time())}:0;{command}"  # extended history format
+        with open(histfile, "a") as f:
+            f.write(line + "\n")
     except Exception:
         pass  # Silently fail - history writing is not critical
 
@@ -418,11 +427,11 @@ def write_to_powershell_history(command):
 
 
 def write_command_history(command, system_info):
-    """Write command to appropriate shell history based on system."""
+    """Write command to the current shell's history."""
     if "Windows" in system_info:
         write_to_powershell_history(command)
     else:
-        write_to_zsh_history(command)
+        write_to_shell_history(command)
 
 
 def reload_zsh_history():  # This function was unused (commented out call)

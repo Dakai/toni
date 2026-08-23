@@ -15,7 +15,7 @@ from toni.core import (
 )
 
 
-__version__ = "0.1.28"
+__version__ = "0.1.29"
 
 
 def main():

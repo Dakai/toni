@@ -8,6 +8,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub Stars](https://img.shields.io/github/stars/Dakai/toni?style=social)](https://github.com/Dakai/toni)
 
+![TONI demo: translating natural language into shell commands](assets/demo.gif)
+
 TONI is a lightweight CLI that translates natural language into terminal commands — system-aware (Linux/macOS/Windows), verifies the binary exists, and optionally executes.
 
 ## Inspiration
@@ -48,9 +50,45 @@ pipx install toni-cli
 
 **Note**: On Windows, TONI generates Windows-native commands (CMD/PowerShell) and saves command history to `~/.toni_history`.
 
-## Demo
+## Usage
 
-![TONI demo: translating natural language into shell commands](assets/demo.gif)
+Simply type `toni` followed by your natural language description:
+
+```bash
+# Basic file operations
+toni list all pdf files in current directory
+toni find all files modified in the last 7 days
+
+# System queries
+toni show my disk usage
+toni what processes are using the most memory
+
+# Complex tasks
+toni create a backup of my Documents folder
+toni find the largest files in this directory
+```
+
+## Examples
+
+### Linux/macOS
+```
+$ toni find all python files containing the word "error"
+
+Detected system: Linux (arch)
+Suggested command: grep -r "error" --include="*.py" .
+Explanation: Search recursively for the word "error" in all Python files in the current directory
+Do you want to execute this command? (y/n):
+```
+
+### Windows
+```
+> toni find all python files containing the word "error"
+
+Detected system: Windows 10 (10.0.19045)
+Suggested command: findstr /s /i "error" *.py
+Explanation: Search for "error" in all Python files recursively
+Do you want to execute this command? (Y/n):
+```
 
 ## Configuration
 
@@ -127,45 +165,6 @@ export MY_PROVIDER_API_KEY='your-key'
 ```
 or `env-key` in the INI. `GOOGLEAI_API_KEY` is also accepted for `GEMINI`.
 
-## Usage
-
-Simply type `toni` followed by your natural language description:
-
-```bash
-# Basic file operations
-toni list all pdf files in current directory
-toni find all files modified in the last 7 days
-
-# System queries
-toni show my disk usage
-toni what processes are using the most memory
-
-# Complex tasks
-toni create a backup of my Documents folder
-toni find the largest files in this directory
-```
-
-## Examples
-
-### Linux/macOS
-```
-$ toni find all python files containing the word "error"
-
-Detected system: Linux (arch)
-Suggested command: grep -r "error" --include="*.py" .
-Explanation: Search recursively for the word "error" in all Python files in the current directory
-Do you want to execute this command? (y/n):
-```
-
-### Windows
-```
-> toni find all python files containing the word "error"
-
-Detected system: Windows 10 (10.0.19045)
-Suggested command: findstr /s /i "error" *.py
-Explanation: Search for "error" in all Python files recursively
-Do you want to execute this command? (Y/n):
-```
 
 ## Development
 
@@ -176,20 +175,20 @@ git clone https://github.com/Dakai/toni.git
 cd toni
 ```
 
-2. Create a virtual environment:
+- Create a virtual environment:
 
 ```bash
 python -m venv venv
 source venv/bin/activate
 ```
 
-3. Install for development:
+- Install for development:
 
 ```bash
 pip install -e .
 ```
 
-4. Make your changes and submit a pull request!
+- Make your changes and submit a pull request!
 
 ## License
 

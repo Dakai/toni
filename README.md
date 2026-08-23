@@ -1,8 +1,14 @@
-# TONI - Terminal Operation Natural Instruction
+# TONI — Terminal Operation Natural Instruction
 
-TONI is a lightweight CLI tool that translates natural language into terminal commands using AI. Simply describe what you want to do, and TONI will suggest the appropriate command for your system.
+> Describe in plain English, get a shell command. `Gemini` `OpenAI` `Mistral` `DeepSeek` `Ollama` `Groq` … one `~/.toni` via [`litellm`](https://github.com/BerriAI/litellm).
 
-[![PyPI version](https://badge.fury.io/py/toni-cli.svg)](https://badge.fury.io/py/toni-cli)
+[![PyPI version](https://badge.fury.io/py/toni-cli.svg)](https://pypi.org/project/toni-cli/)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/toni-cli?label=downloads&logo=pypi)](https://pypi.org/project/toni-cli/)
+[![Python 3.10+](https://img.shields.io/pypi/pyversions/toni-cli?logo=python&logoColor=white)](https://pypi.org/project/toni-cli/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub Stars](https://img.shields.io/github/stars/Dakai/toni?style=social)](https://github.com/Dakai/toni)
+
+TONI is a lightweight CLI that translates natural language into terminal commands — system-aware (Linux/macOS/Windows), verifies the binary exists, and optionally executes.
 
 ## Inspiration
 
@@ -41,6 +47,19 @@ pipx install toni-cli
 ```
 
 **Note**: On Windows, TONI generates Windows-native commands (CMD/PowerShell) and saves command history to `~/.toni_history`.
+
+## Demo
+
+> TODO: record 10s `vhs`/`asciinema` GIF — `toni find large files` → `du -h . | sort -rh | head`
+<!-- Record: vhs demo.tape  then  gh api repos/Dakai/toni/contents/demo.gif --PUT ... -->
+
+```bash
+$ toni find all python files containing "error"
+Detected system: Linux (manjaro)
+Suggested command: grep -r "error" --include="*.py" .
+Explanation: Search recursively for "error" in Python files
+Do you want to execute the command? (Y/n):
+```
 
 ## Configuration
 
@@ -161,10 +180,8 @@ Do you want to execute this command? (Y/n):
 
 To contribute to TONI:
 
-1. Clone the repository:
-
 ```bash
-git clone https://github.com/yourusername/toni.git
+git clone https://github.com/Dakai/toni.git
 cd toni
 ```
 
@@ -178,7 +195,7 @@ source venv/bin/activate
 3. Install for development:
 
 ```bash
-pip install -e ".[dev]"
+pip install -e .
 ```
 
 4. Make your changes and submit a pull request!
@@ -190,4 +207,5 @@ MIT
 ## Acknowledgements
 
 - [YAI](https://github.com/ekzhang/yai) for the inspiration
-- Google Gemini and OpenAI for their powerful AI APIs
+- [BerriAI/litellm](https://github.com/BerriAI/litellm) for the unified LLM gateway
+- Google Gemini, OpenAI, Mistral, DeepSeek for their APIs

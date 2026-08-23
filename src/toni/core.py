@@ -1,38 +1,16 @@
 import os
 import subprocess
 import time
-try:
-    from google import genai
-except ImportError:
-    genai = None
-
-try:
-    from openai import OpenAI
-except ImportError:
-    OpenAI = None
-try:
-    from mistralai import Mistral
-except ImportError:
-    try:
-        from mistralai.client import Mistral
-    except ImportError:
-        # If neither works, it might not be installed, but we handle that in cli.py/core.py
-        Mistral = None
 import platform
 import shutil
 import configparser
 import re
 import json
-try:
-    import requests
-except ImportError:
-    requests = None
-try:
-    from google.genai import types
-except ImportError:
-    types = None
 
-
+try:
+    import litellm
+except ImportError:
+    litellm = None
 def get_system_message(system_info):
     """Generate system message with platform-specific examples."""
 
@@ -155,207 +133,100 @@ priority = 25
     return config
 
 
+_LITELLM_PREFIX = {
+    "GEMINI": "gemini",
+    "MISTRAL": "mistral",
+    "OPENAI": "openai",
+    "DEEPSEEK": "deepseek",
+    "OPENROUTER": "openrouter",
+}
+
+
+def _litellm_model(provider):
+    """Map provider dict to litellm model string."""
+    name = provider["name"].upper()
+    model = provider["model"]
+    # already prefixed (e.g. openrouter/xxx) -> keep as-is
+    if "/" in model:
+        return model
+    prefix = _LITELLM_PREFIX.get(name)
+    if prefix:
+        return f"{prefix}/{model}"
+    # custom provider with url -> treat as OpenAI-compatible
+    if provider.get("url"):
+        return f"openai/{model}"
+    return model
+
+
+def get_llm_response(provider, prompt, system_info):
+    """Single entry point via litellm. Returns JSON string or None."""
+    if litellm is None:
+        print("Error: 'litellm' package not installed. Run: pip install litellm")
+        return None
+    # resolve api_key
+    if provider.get("env_key"):
+        api_key = os.environ.get(provider["env_key"])
+    else:
+        env_name = f"{provider['name'].upper()}_API_KEY"
+        # GEMINI historically uses GOOGLEAI_API_KEY
+        if provider["name"].upper() == "GEMINI":
+            api_key = provider.get("key") or os.environ.get("GOOGLEAI_API_KEY") or os.environ.get(env_name)
+        else:
+            api_key = provider.get("key") or os.environ.get(env_name)
+    if not api_key:
+        return None
+    litellm_model = _litellm_model(provider)
+    system_msg = get_system_message(system_info).format(system_info=system_info)
+    kwargs = {
+        "model": litellm_model,
+        "messages": [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": prompt},
+        ],
+        "api_key": api_key,
+        "temperature": 0,
+        "max_tokens": 4096,
+    }
+    if provider.get("url"):
+        kwargs["api_base"] = provider["url"]
+    try:
+        resp = litellm.completion(**kwargs)
+        content = resp.choices[0].message.content if resp.choices else None
+        if not content:
+            return None
+        content = str(content)
+        m = re.search(r"(\{.*?\})", content, re.DOTALL)
+        if m:
+            try:
+                json.loads(m.group(1))
+                return m.group(1)
+            except json.JSONDecodeError:
+                pass
+        return content
+    except Exception as e:
+        print(f"An error occurred with {provider['name']} (model: {provider['model']}): {e}")
+        return None
+
+
+# --- deprecated shims (keep import compatibility) ---
 def get_gemini_response(api_key, prompt, system_info, model_name="gemini-2.0-flash"):
-    if genai is None:
-        print(f"Error: The 'google-genai' package is not installed correctly or version is incompatible.")
-        return None
-    try:
-        client = genai.Client(api_key=api_key)
-
-        # generation_config = {
-        #    "temperature": 0.2,
-        #    "top_p": 0.95,
-        #    "top_k": 0,
-        #    "max_output_tokens": 8192,
-        # }
-        config = types.GenerateContentConfig(
-            temperature=0,
-            top_p=0.95,
-            top_k=0,
-            candidate_count=1,
-            seed=5,
-            max_output_tokens=8192,
-            stop_sequences=["STOP!"],
-            presence_penalty=0.0,
-            frequency_penalty=0.0,
-        )
-
-        # model = genai.GenerativeModel(
-        #    model_name=model_name, generation_config=generation_config
-        # )
-
-        formatted_system_message = get_system_message(system_info).format(
-            system_info=system_info
-        )
-        combined_prompt = f"{formatted_system_message}\n\nUser request: {prompt}"
-
-        response = client.models.generate_content(
-            model=model_name,
-            contents=[{"parts": [{"text": combined_prompt}]}],
-            config=config,
-        )
-
-        response_text = response.text
-
-        if response_text:
-            json_match = re.search(r"(\{.*?\})", response_text, re.DOTALL)
-            if json_match:
-                try:
-                    json.loads(json_match.group(1))
-                    return json_match.group(1)
-                except json.JSONDecodeError:
-                    # The matched text is not valid JSON, fall through to returning raw text
-                    pass
-            return response_text  # Fallback to raw text if no JSON object found or if it's invalid
-        return None  # Explicitly return None if response_text is empty
-
-    except Exception as e:
-        print(f"An error occurred with Gemini (model: {model_name}): {e}")
-        return None
+    return get_llm_response({"name": "GEMINI", "model": model_name, "url": "", "key": api_key, "env_key": ""}, prompt, system_info)
 
 
-def get_mistral_response(
-    api_key,
-    prompt,
-    system_info,
-    model_name="mistral-small-latest",
-):
-    if Mistral is None:
-        print(f"Error: The 'mistralai' package is not installed correctly or version is incompatible.")
-        return None
-    try:
-        client = Mistral(api_key=api_key)
-
-        formatted_system_message = get_system_message(system_info).format(
-            system_info=system_info
-        )
-
-        chat_completion = client.chat.complete(
-            messages=[
-                {"role": "system", "content": formatted_system_message},
-                {"role": "user", "content": prompt},
-            ],
-            model=model_name,  # Use the model_name parameter
-            max_tokens=4096,
-        )
-
-        response = None
-
-        if chat_completion.choices:
-            response = chat_completion.choices[0].message.content
-
-        if response:
-            response = str(response)
-            json_match = re.search(r"(\{.*?\})", response, re.DOTALL)
-            if json_match:
-                try:
-                    json.loads(json_match.group(1))
-                    return json_match.group(1)
-                except json.JSONDecodeError:
-                    pass
-            return response  # Fallback to raw text if no JSON object found
-        return None  # Explicitly return None if response is empty
-
-    except Exception as e:
-        print(f"An error occurred with Mistral (model: {model_name}): {e}")
-        return None
+def get_mistral_response(api_key, prompt, system_info, model_name="mistral-small-latest"):
+    return get_llm_response({"name": "MISTRAL", "model": model_name, "url": "", "key": api_key, "env_key": ""}, prompt, system_info)
 
 
-def get_open_ai_response(
-    api_key, prompt, system_info, model_name="gpt-4o-mini", base_url=None
-):
-    """Deprecated: Use call_openai_compatible."""
-    return call_openai_compatible(
-        "OpenAI", base_url, api_key, model_name, prompt, system_info
-    )
+def get_open_ai_response(api_key, prompt, system_info, model_name="gpt-4o-mini", base_url=None):
+    return get_llm_response({"name": "OPENAI", "model": model_name, "url": base_url or "https://api.openai.com/v1", "key": api_key, "env_key": ""}, prompt, system_info)
 
 
-def call_openai_compatible(
-    provider_name, base_url, api_key, model_name, prompt, system_info
-):
-    if OpenAI is None:
-        print(f"Error: The 'openai' package is not installed correctly or version is incompatible.")
-        return None
-    try:
-        client = OpenAI(api_key=api_key, base_url=base_url if base_url else None)
-
-        formatted_system_message = get_system_message(system_info).format(
-            system_info=system_info
-        )
-
-        chat_completion = client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": formatted_system_message},
-                {"role": "user", "content": prompt},
-            ],
-            model=model_name,
-            temperature=0.2,
-            max_tokens=4096,
-        )
-
-        response = chat_completion.choices[0].message.content
-
-        if response:
-            json_match = re.search(r"(\{.*?\})", response, re.DOTALL)
-            if json_match:
-                try:
-                    json.loads(json_match.group(1))
-                    return json_match.group(1)
-                except json.JSONDecodeError:
-                    pass
-            return response
-        return None
-
-    except Exception as e:
-        print(f"An error occurred with {provider_name} (model: {model_name}): {e}")
-        return None
+def call_openai_compatible(provider_name, base_url, api_key, model_name, prompt, system_info):
+    return get_llm_response({"name": provider_name, "model": model_name, "url": base_url or "", "key": api_key, "env_key": ""}, prompt, system_info)
 
 
-def get_openrouter_response(
-    api_key, prompt, system_info, model_name="openrouter/free"
-):
-    if requests is None:
-        print(f"Error: The 'requests' package is not installed correctly or version is incompatible.")
-        return None
-    try:
-        url = "https://openrouter.ai/api/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-        formatted_system_message = get_system_message(system_info).format(
-            system_info=system_info
-        )
-
-        payload = {
-            "model": model_name,
-            "messages": [
-                {"role": "system", "content": formatted_system_message},
-                {"role": "user", "content": prompt},
-            ],
-            "reasoning": {"enabled": True},
-        }
-
-        response = requests.post(url, headers=headers, data=json.dumps(payload))
-        response.raise_for_status()
-        data = response.json()
-
-        if "choices" in data and len(data["choices"]) > 0:
-            content = data["choices"][0]["message"].get("content")
-            if content:
-                json_match = re.search(r"(\{.*?\})", content, re.DOTALL)
-                if json_match:
-                    try:
-                        json.loads(json_match.group(1))
-                        return json_match.group(1)
-                    except json.JSONDecodeError:
-                        pass
-                return content
-        return None
-
-    except Exception as e:
-        print(f"An error occurred with OpenRouter (model: {model_name}): {e}")
-        return None
+def get_openrouter_response(api_key, prompt, system_info, model_name="openrouter/free"):
+    return get_llm_response({"name": "OPENROUTER", "model": model_name, "url": "", "key": api_key, "env_key": ""}, prompt, system_info)
 
 
 def discover_providers(config):
@@ -408,6 +279,7 @@ def discover_providers(config):
             continue
 
     custom_providers.sort(key=lambda p: p["priority"], reverse=True)
+    native_providers.sort(key=lambda p: p["priority"], reverse=True)
 
     return {
         "custom": custom_providers,

@@ -11,7 +11,7 @@ TONI was inspired by [YAI (Yet Another Interpreter)](https://github.com/ekzhang/
 ## Features
 
 - Translates natural language to terminal commands
-- Prioritizes Google Gemini AI with OpenAI fallback
+- **Unified LLM via `litellm`**: single entry point for 100+ providers (OpenAI, Gemini, Mistral, DeepSeek, OpenRouter, Ollama, Groq, etc.) — no per-provider boilerplate
 - **Cross-platform**: Works on Linux, macOS, and Windows
 - System-aware: Detects your OS and generates platform-appropriate commands
 - Verifies command availability before execution
@@ -44,30 +44,42 @@ pipx install toni-cli
 
 ## Configuration
 
-TONI uses a configuration file at `~/.toni` (INI format). By default, it supports Google Gemini, OpenAI, and Mistral.
+TONI uses a configuration file at `~/.toni` (INI format) and env vars. Since `0.1.23` all providers are routed through [`litellm`](https://github.com/BerriAI/litellm) — one `completion()` call for 100+ models, no per-provider boilerplate. Old `~/.toni` files remain fully compatible.
 
 ### Built-in Providers
 
-1. **Google Gemini** (Preferred):
-   ```bash
-   export GOOGLEAI_API_KEY='your-gemini-api-key'
-   ```
+Defaults (override in `~/.toni` or env):
 
-2. **OpenAI**:
-   ```bash
-   export OPENAI_API_KEY='your-openai-api-key'
-   ```
+| Provider | Model default | Env var | Priority |
+|---|---|---|---|
+| `GEMINI` | `gemini-2.0-flash` | `GOOGLEAI_API_KEY` | 40 |
+| `OPENAI` | `gpt-4o-mini` | `OPENAI_API_KEY` | 50 |
+| `MISTRAL` | `mistral-small-latest` | `MISTRAL_API_KEY` | 30 |
+| `DEEPSEEK` | `deepseek-v4-flash` | `DEEPSEEK_API_KEY` | 25 |
+| `OPENROUTER` | `openrouter/free` | `OPENROUTER_API_KEY` | 50 |
 
-3. **Mistral**:
-   ```bash
-   export MISTRAL_API_KEY='your-mistral-api-key'
-   ```
+```bash
+export GOOGLEAI_API_KEY='your-gemini-api-key'
+export OPENAI_API_KEY='your-openai-api-key'
+export MISTRAL_API_KEY='your-mistral-api-key'
+```
 
-### Custom OpenAI-Compatible Providers
+Per-provider `~/.toni` overrides:
+```ini
+[GEMINI]
+model=gemini-2.5-flash-lite
+priority=40
 
-You can add unlimited custom providers (Ollama, LM Studio, OpenRouter, etc.) by adding sections to `~/.toni`. Any section with a `url` field is treated as an OpenAI-compatible provider.
+[OPENAI]
+model=gpt-4o-mini
+priority=50
+```
 
-#### Example: Ollama
+### Custom Providers (litellm)
+
+Any section with `url` is treated as an OpenAI-compatible endpoint (`model` → `openai/<model>` + `api_base=url`). Built-ins map to `litellm` prefixes (`gemini/`, `openai/`, `mistral/`, `deepseek/`, `openrouter/`).
+
+#### Example: Ollama (local)
 ```ini
 [ollama]
 url = http://localhost:11434/v1
@@ -76,8 +88,14 @@ model = llama3.2:latest
 priority = 100
 ```
 
-#### Example: OpenRouter
+#### Example: Groq / OpenRouter / custom gateway
 ```ini
+[groq]
+url = https://api.groq.com/openai/v1
+model = llama-3.1-8b-instant
+env-key = GROQ_API_KEY
+priority = 90
+
 [openrouter]
 url = https://openrouter.ai/api/v1
 key = sk-or-v1-xxx...
@@ -85,19 +103,19 @@ model = anthropic/claude-3.5-sonnet
 priority = 80
 ```
 
-### Priority System
+### Priority & Fallback
 
-- Custom providers are tried first, sorted by their `priority` field (higher numbers first).
-- Default priority is `50`.
-- Built-in providers have default priorities: OpenAI (`50`), Gemini (`40`), Mistral (`30`).
-- If a provider is disabled (`disabled = true`) or fails, TONI falls back to the next one in the chain.
+- All providers (`custom` + `native`) are merged and tried in `priority` descending (higher first, default `50`).
+- `disabled=true` skips a provider; failure falls through to next.
+- `env-key` lets a section read its key from a custom env var (e.g. `env-key=GROQ_API_KEY`).
 
 ### Environment Variables
 
-For any custom provider `[my-provider]`, you can set the API key via:
+For any custom provider `[my-provider]`, you can set the key via:
 ```bash
 export MY_PROVIDER_API_KEY='your-key'
 ```
+or `env-key` in the INI. `GOOGLEAI_API_KEY` is also accepted for `GEMINI`.
 
 ## Usage
 

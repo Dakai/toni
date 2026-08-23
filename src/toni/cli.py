@@ -3,14 +3,9 @@ import os
 import json
 from termcolor import colored
 
-# Assuming 'toni' is a package or core.py is in PYTHONPATH
-# If core.py is in the same directory, use: from core import ...
 from toni.core import (
     get_system_info,
-    get_gemini_response,
-    get_mistral_response,
-    get_openrouter_response,
-    call_openai_compatible,
+    get_llm_response,
     discover_providers,
     command_exists,
     execute_command,
@@ -18,7 +13,7 @@ from toni.core import (
 )
 
 
-__version__ = "0.1.22"
+__version__ = "0.1.23"
 
 
 def main():
@@ -47,108 +42,29 @@ def main():
         response = None
         provider_used = None
 
-        for provider in providers["custom"]:
-            if provider["env_key"]:
-                api_key = os.environ.get(provider["env_key"])
-            else:
-                env_key_name = f"{provider['name'].upper()}_API_KEY"
-                api_key = provider["key"] or os.environ.get(env_key_name)
-
-            if not api_key:
-                if provider["env_key"]:
-                    print(
-                        f"API key not found in environment ({provider['env_key']}) for provider '{provider['name']}'. Skipping."
-                    )
-                else:
-                    print(
-                        f"API key not found for provider '{provider['name']}'. Skipping."
-                    )
-                continue
-
-            response = call_openai_compatible(
-                provider["name"],
-                provider["url"],
-                api_key,
-                provider["model"],
-                query,
-                system_info,
-            )
-
+        # unified priority-ordered list (litellm handles all providers)
+        all_providers = sorted(
+            providers["custom"] + providers["native"],
+            key=lambda p: p["priority"],
+            reverse=True,
+        )
+        for provider in all_providers:
+            response = get_llm_response(provider, query, system_info)
             if response:
                 provider_used = provider["name"]
                 break
-
-        if response is None:
-            for provider in providers["native"]:
-                if provider["name"] == "GEMINI":
-                    if provider["env_key"]:
-                        api_key = os.environ.get(provider["env_key"])
-                    else:
-                        api_key = provider["key"] or os.environ.get("GOOGLEAI_API_KEY")
-                    if not api_key:
-                        if provider["env_key"]:
-                            print(
-                                f"Gemini API key not found in environment ({provider['env_key']}). Skipping."
-                            )
-                        else:
-                            print(
-                                "Gemini API key not found in config (GEMINI.key) or environment (GOOGLEAI_API_KEY). Skipping."
-                            )
-                        continue
-
-                    response = get_gemini_response(
-                        api_key, query, system_info, provider["model"]
-                    )
-                    if response:
-                        provider_used = "Gemini"
-                        break
-
-                elif provider["name"] == "MISTRAL":
-                    if provider["env_key"]:
-                        api_key = os.environ.get(provider["env_key"])
-                    else:
-                        api_key = provider["key"] or os.environ.get("MISTRAL_API_KEY")
-                    if not api_key:
-                        if provider["env_key"]:
-                            print(
-                                f"Mistral API key not found in environment ({provider['env_key']}). Skipping."
-                            )
-                        else:
-                            print(
-                                "Mistral API key not found in config (MISTRAL.key) or environment (MISTRAL_API_KEY). Skipping."
-                            )
-                        continue
-
-                    response = get_mistral_response(
-                        api_key, query, system_info, provider["model"]
-                    )
-                    if response:
-                        provider_used = "Mistral"
-                        break
-
-                elif provider["name"] == "OPENROUTER":
-                    if provider["env_key"]:
-                        api_key = os.environ.get(provider["env_key"])
-                    else:
-                        api_key = provider["key"] or os.environ.get("OPENROUTER_API_KEY")
-                    if not api_key:
-                        if provider["env_key"]:
-                            print(
-                                f"OpenRouter API key not found in environment ({provider['env_key']}). Skipping."
-                            )
-                        else:
-                            print(
-                                "OpenRouter API key not found in config (OPENROUTER.key) or environment (OPENROUTER_API_KEY). Skipping."
-                            )
-                        continue
-
-                    response = get_openrouter_response(
-                        api_key, query, system_info, provider["model"]
-                    )
-                    if response:
-                        provider_used = "OpenRouter"
-                        break
-
+            # missing-key hint (get_llm_response returns None silently for missing key)
+            if provider.get("env_key"):
+                if not os.environ.get(provider["env_key"]):
+                    print(f"API key not found in environment ({provider['env_key']}) for provider '{provider['name']}'. Skipping.")
+            else:
+                env_name = f"{provider['name'].upper()}_API_KEY"
+                if provider["name"].upper() == "GEMINI":
+                    if not (provider.get("key") or os.environ.get("GOOGLEAI_API_KEY") or os.environ.get(env_name)):
+                        print(f"API key not found for provider '{provider['name']}'. Skipping.")
+                else:
+                    if not (provider.get("key") or os.environ.get(env_name)):
+                        print(f"API key not found for provider '{provider['name']}'. Skipping.")
         if response is None:
             print("\nFailed to get a command from any LLM provider.")
             print(

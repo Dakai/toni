@@ -50,16 +50,7 @@ pipx install toni-cli
 
 ## Demo
 
-> TODO: record 10s `vhs`/`asciinema` GIF — `toni find large files` → `du -h . | sort -rh | head`
-<!-- Record: vhs demo.tape  then  gh api repos/Dakai/toni/contents/demo.gif --PUT ... -->
-
-```bash
-$ toni find all python files containing "error"
-Detected system: Linux (manjaro)
-Suggested command: grep -r "error" --include="*.py" .
-Explanation: Search recursively for "error" in Python files
-Do you want to execute the command? (Y/n):
-```
+![TONI demo: translating natural language into shell commands](assets/demo.gif)
 
 ## Configuration
 

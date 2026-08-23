@@ -1,4 +1,5 @@
 import os
+import shlex
 import subprocess
 import time
 import platform
@@ -367,7 +368,13 @@ def execute_command(command, system_info=""):
 
 
 def command_exists(command):
-    if not command:  # Handle empty command string
+    if not command or not command.strip():
         return False
-    base_command = command.split()[0]
+    try:
+        parts = shlex.split(command, posix=True)
+    except ValueError:
+        parts = command.strip().split()
+    if not parts:
+        return False
+    base_command = os.path.expanduser(parts[0].strip("'\""))
     return shutil.which(base_command) is not None

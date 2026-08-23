@@ -13,7 +13,7 @@ from toni.core import (
 )
 
 
-__version__ = "0.1.23"
+__version__ = "0.1.24"
 
 
 def main():
@@ -31,7 +31,12 @@ def main():
             parser.print_help()
             return
 
-        query = " ".join(args.query).rstrip("?")
+        query = " ".join(args.query).strip()
+        # Remove a single pair of surrounding matching quotes that the shell
+        # may have preserved (e.g. toni '"hello, world."'). Interior marks
+        # like , . ? ' " ~ are kept verbatim for the LLM.
+        if len(query) >= 2 and query[0] == query[-1] and query[0] in ("'", '"'):
+            query = query[1:-1].strip()
 
         system_info = get_system_info()
         print(f"Detected system: {system_info}")

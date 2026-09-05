@@ -237,6 +237,22 @@ def _litellm_model(provider):
     return model
 
 
+def _use_responses_api(provider):
+    """True when this provider needs the Responses API, not Chat Completions."""
+    url = (provider.get("url") or "").rstrip("/")
+    if url.endswith("/responses"):
+        return True
+    if "opencode.ai/zen" in url:
+        return (provider.get("model") or "").lower().startswith(("muse-spark", "gpt-", "gpt ", "grok"))
+    return False
+
+def _strip_api_suffix(url):
+    """litellm appends the endpoint path itself; drop it if the user put it in."""
+    for suffix in ("/responses", "/chat/completions", "/messages"):
+        if url.rstrip("/").endswith(suffix):
+            return url.rstrip("/")[: -len(suffix)] or "/"
+    return url
+
 def get_llm_response(provider, prompt, system_info):
     """Single entry point via litellm. Returns JSON string or None."""
     if litellm is None:
@@ -256,6 +272,43 @@ def get_llm_response(provider, prompt, system_info):
         return None
     litellm_model = _litellm_model(provider)
     system_msg = get_system_message(system_info).format(system_info=system_info)
+    api_base = _strip_api_suffix(provider["url"]) if provider.get("url") else ""
+    # Responses-family models (muse-spark/gpt/grok on zen) need litellm.responses()
+    if _use_responses_api(provider):
+        resp_kwargs = {
+            "model": litellm_model,
+            "instructions": system_msg,
+            "input": prompt,
+            "api_key": api_key,
+            "temperature": 0,
+            "max_output_tokens": 4096,
+        }
+        if api_base:
+            resp_kwargs["api_base"] = api_base
+        last_err = None
+        for attempt in range(3):
+            try:
+                resp = litellm.responses(**resp_kwargs)
+                content = getattr(resp, "output_text", None) or None
+                if not content:
+                    return None
+                content = str(content)
+                m = re.search(r"(\{.*?\})", content, re.DOTALL)
+                if m:
+                    try:
+                        json.loads(m.group(1))
+                        return m.group(1)
+                    except json.JSONDecodeError:
+                        pass
+                return content
+            except KeyboardInterrupt:
+                raise
+            except Exception as e:
+                last_err = e
+                if attempt < 2:
+                    time.sleep(1)
+        print(f"An error occurred with {provider['name']} (model: {provider['model']}): {last_err}")
+        return None
     kwargs = {
         "model": litellm_model,
         "messages": [
@@ -266,8 +319,8 @@ def get_llm_response(provider, prompt, system_info):
         "temperature": 0,
         "max_tokens": 4096,
     }
-    if provider.get("url"):
-        kwargs["api_base"] = provider["url"]
+    if api_base:
+        kwargs["api_base"] = api_base
     # ponytail: fixed 3 attempts/1s backoff — some gateways (opencode zen)
     # intermittently return spurious 401 "Model is not supported"; raise the
     # cap or use exponential backoff if that proves too weak.
